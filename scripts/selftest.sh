@@ -673,6 +673,43 @@ else
     printf '  ✗ pd と無関係なプロジェクトで動いている: %s\n' "$out"; fail=$((fail + 1))
 fi
 
+# ------------------------------------------------------- スキーマの三者一致
+#
+# 規約を書いた文書と、判定するコードは別々に育つ。片方だけ変えると
+# 「文書どおりに書いたのに弾かれる」事故になる（rules/05-operations.md §6）。
+# 一致を注意力に委ねず、壊して検出できることを確かめる。
+
+SYNC="$PLUGIN/scripts/schema-sync.py"
+
+if python3 "$SYNC" >/dev/null 2>&1; then
+    printf '  ✓ スキーマの三者一致（正常時は通る）\n'; pass=$((pass + 1))
+else
+    printf '  ✗ 正常なスキーマで食い違いを報告している\n'
+    python3 "$SYNC" 2>&1 | sed 's/^/      /'
+    fail=$((fail + 1))
+fi
+
+# CLI 側だけ enum を増やす（ss-uiux で実際に起きた事故の再現）
+cp "$PLUGIN/scripts/voices.mjs" "$WORK/voices.bak"
+sed 's/    "user-validation",/    "user-validation",\n    "operator-validation",/' \
+    "$WORK/voices.bak" > "$PLUGIN/scripts/voices.mjs"
+if python3 "$SYNC" 2>&1 | grep -q "食い違っている"; then
+    printf '  ✓ CLI 側だけ enum を足すと検出する\n'; pass=$((pass + 1))
+else
+    printf '  ✗ enum の食い違いを検出できない（注意書きだけでは守られない）\n'; fail=$((fail + 1))
+fi
+cp "$WORK/voices.bak" "$PLUGIN/scripts/voices.mjs"
+
+# 文書側だけ enum を減らす
+cp "$PLUGIN/skills/pd/uiux/voice-schema.md" "$WORK/schema.bak"
+sed 's| / `question` | |' "$WORK/schema.bak" > "$PLUGIN/skills/pd/uiux/voice-schema.md"
+if python3 "$SYNC" >/dev/null 2>&1; then
+    printf '  ✗ 文書側の enum 変更を検出できない\n'; fail=$((fail + 1))
+else
+    printf '  ✓ 文書側だけ enum を減らすと検出する\n'; pass=$((pass + 1))
+fi
+cp "$WORK/schema.bak" "$PLUGIN/skills/pd/uiux/voice-schema.md"
+
 # ---------------------------------------------------------------- 誤検知の確認（最重要）
 
 prune

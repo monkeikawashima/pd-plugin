@@ -21,5 +21,8 @@ jobs:
       - name: 配布物が揃っているか
         run: python3 scripts/validate.py
 
+      - name: スキーマが3箇所で一致しているか
+        run: python3 scripts/schema-sync.py
+
       - name: 検証器が違反を検出するか
         run: sh scripts/selftest.sh

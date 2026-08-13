@@ -79,6 +79,9 @@ git --no-pager diff --stat
 step "配布物を検証する（validate.py）"
 python3 scripts/validate.py || { git checkout -- .; die "検証に落ちた。書き換えは元に戻した"; }
 
+step "スキーマの三者一致を確かめる（schema-sync.py）"
+python3 scripts/schema-sync.py || { git checkout -- .; die "スキーマが一致していない。書き換えは元に戻した"; }
+
 step "検証器を検証する（selftest.sh）"
 sh scripts/selftest.sh || { git checkout -- .; die "自己テストに落ちた。書き換えは元に戻した"; }
 

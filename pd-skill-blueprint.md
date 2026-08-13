@@ -71,7 +71,7 @@ pd-plugin/                          配布物。Public
 │   │   ├── kpi.md
 │   │   └── experiment.md
 │   ├── uiux/                       UI/UX の規律（v2.0.0）
-│   │   ├── rules/                  共通言語・層の規律・決定規則・証拠規則・a11y
+│   │   ├── rules/                  共通言語・層の規律・決定規則・証拠規則・a11y・運用
 │   │   ├── templates/              画面仕様・ストーリー・UXDR・検証計画
 │   │   ├── voice-schema.md         ボイス台帳のスキーマ（正本）
 │   │   ├── voice-template.md       ボイスの雛形
@@ -88,6 +88,7 @@ pd-plugin/                          配布物。Public
 ├── scripts/
 │   ├── validate.py                 規約の機械検証（唯一の判定者）
 │   ├── selftest.sh                 検証器が違反を検出できるかのテスト
+│   ├── schema-sync.py              ボイスのスキーマが3箇所で一致しているか
 │   └── voices.mjs                  ボイス台帳 CLI（依存0）
 ├── .github/workflows/validate.yml  配布物の欠落と自己テスト
 ├── pd-skill-blueprint.md           この指示書

@@ -167,7 +167,7 @@ Note が1件も無い場合、この Step は不要。既存 Note を全件読�
 
 規律の実体は `skills/pd/uiux/` にある。
 
-- `uiux/rules/` — 共通言語 / 層の規律 / 決定規則 / 証拠規則 / アクセシビリティ
+- `uiux/rules/` — 共通言語 / 層の規律 / 決定規則 / 証拠規則 / アクセシビリティ / 運用の劣化と対処
 - `uiux/templates/` — 画面仕様 / ユーザーストーリー / UXDR / 検証計画
 - `uiux/voice-schema.md` — ボイス台帳のスキーマ（**正本**）
 - `uiux/glossary.md` — 用語
