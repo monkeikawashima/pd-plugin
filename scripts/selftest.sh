@@ -471,6 +471,7 @@ PY
 }
 bump 9.9.9
 expect_plugin "版を上げて履歴を書き忘れる" "9.9.9 の項目が無い"
+expect_plugin "CI に焼き込む ref の古び" "CI に焼き込む ref が古い"
 cp "$ROOT/.claude-plugin/marketplace.json" "$PLUGIN/.claude-plugin/marketplace.json"
 
 # plugin.json だけ上げ忘れた（marketplace.json 側だけ上げても更新は届かない）

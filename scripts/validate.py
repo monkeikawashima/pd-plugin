@@ -614,6 +614,16 @@ def check_version_consistency() -> None:
         err(changelog, f"{version} の項目が無い"
                        "（利用者が更新の内容を判断できない）")
 
+    # pd-init が利用プロジェクトの CI に焼き込む版。古いまま配ると、
+    # 初期状態から手元（最新）と CI（旧版）で判定が食い違う。
+    init = PLUGIN_ROOT / "commands/pd-init.md"
+    if init.exists():
+        refs = re.findall(r"ref:\s*v([\d.]+)", init.read_text(encoding="utf-8"))
+        for ref in refs:
+            if ref != version:
+                err(init, f"CI に焼き込む ref が古い（v{ref} ≠ v{version}）。"
+                          "新しいプロジェクトが旧版の判定器で CI を回すことになる")
+
 
 def check_project_guards() -> None:
     """plugin を使うプロジェクト側に、検証を成り立たせるものが揃っているか。"""
