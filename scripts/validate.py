@@ -598,9 +598,18 @@ def check_uxdr(path: Path) -> None:
 
     if fm.get("kind") == "作業仮説":
         named = [v for k, v in secs.items() if "棄却条件" in k]
-        inline = [l for l in text.split("\n")
-                  if "棄却条件" in l and not l.strip().startswith("#")
-                  and not TABLE_SEPARATOR.match(l)]
+        # 表の見出し行（次行が区切り線）は列名であって条件ではない。
+        # 「| 作業仮説 | 棄却条件 |」に閾値を求めると、正しい記録が落ちる。
+        lines = text.split("\n")
+        inline = []
+        for i, line in enumerate(lines):
+            if "棄却条件" not in line or line.strip().startswith("#"):
+                continue
+            if TABLE_SEPARATOR.match(line):
+                continue
+            if i + 1 < len(lines) and TABLE_SEPARATOR.match(lines[i + 1]):
+                continue   # 見出し行
+            inline.append(line)
         if not named and not inline:
             err(path, "kind が 作業仮説 だが棄却条件が無い（棄却条件のない仮説は記録しても意味がない）")
         # 節にまとめて書く形と、表の行に書く形の両方を許す。
