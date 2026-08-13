@@ -19,7 +19,7 @@ description: 実装済み／実装直前の UI を、顧客ボイスと体験の
 ### 1. 顧客ボイスとの突合（**必須。飛ばさない**）
 
 ```bash
-pnpm voices query --screen <画面名>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --screen <画面名>
 ```
 
 | ID | type | 内容 | 判定 |
@@ -58,7 +58,7 @@ pnpm voices query --screen <画面名>
 
 ### 5. 記録する
 
-`pd/reviews/DR-YYYYMMDD-NN-<slug>.md` に残す。
+`pd/reviews/{プロダクト}/{年}/DR-YYYYMMDD-NN-<slug>.md` に残す。
 
 ## 出力形式
 
@@ -85,7 +85,7 @@ pnpm voices query --screen <画面名>
    デザイナー起案: …
 
 ■ 次のアクション: <スキル名>
-■ 記録先: pd/reviews/DR-…
+■ 記録先: pd/reviews/{プロダクト}/{年}/DR-…
 ```
 
 ## 禁止

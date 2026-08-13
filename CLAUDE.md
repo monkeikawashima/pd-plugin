@@ -1,12 +1,12 @@
 # pd-plugin
 
-Product Discovery Skill（`/pd:pd`）の**配布物**。
+Product Discovery Skill（`/pd:analyze`）の**配布物**。
 
 ```
 .claude-plugin/   marketplace / plugin 定義
-skills/pd/        SKILL.md / framework/ / products/_template.md
+skills/analyze/        SKILL.md / framework/ / products/_template.md
 hooks/            PostToolUse / Stop / SessionStart
-commands/         /pd:pd-init  /pd:pd-validate  /pd:pd-uninstall
+commands/         /pd:init  /pd:validate  /pd:uninstall
 scripts/          validate.py（唯一の判定者）/ selftest.sh
 pd-skill-blueprint.md   別プロジェクトで Skill を再構築するための指示書
 README.md         人が読む入口
@@ -31,7 +31,7 @@ sh scripts/selftest.sh          # 検証器が本当に違反を検出するか
 
 ## 1. Skill を変更したら blueprint も更新する（必須・確認不要）
 
-`skills/pd/` 配下（`SKILL.md` / `framework/*.md` / `products/_template.md`）を変更したら、**同じ作業内で** `pd-skill-blueprint.md` の該当箇所も更新する。ユーザーへの確認を取らずに行う。
+`skills/analyze/` 配下（`SKILL.md` / `framework/*.md` / `products/_template.md`）を変更したら、**同じ作業内で** `pd-skill-blueprint.md` の該当箇所も更新する。ユーザーへの確認を取らずに行う。
 
 | Skill 側の変更 | blueprint の更新先 |
 |---|---|
@@ -65,13 +65,13 @@ typo 修正や表現の微調整だけなら更新不要。`hooks/hooks.json` �
 
 ## 2.5 プロジェクト側に置くものは `pd/` から出さない
 
-利用プロジェクトに作るものは `pd/` 配下に収める（v1.4.0〜）。**やめるときに「どれが pd のものか」を判別できるようにするため。** 例外は `.github/workflows/validate.yml` と `CLAUDE.md` の2つだけ（置き場所が決まっているため動かせない）。
+利用プロジェクトに作るものは `pd/` 配下に収める（v0.5.0〜）。**やめるときに「どれが pd のものか」を判別できるようにするため。** 例外は `.github/workflows/validate.yml` と `CLAUDE.md` の2つだけ（置き場所が決まっているため動かせない）。
 
-置き場所を増やすときは `/pd:pd-uninstall` の対象一覧にも足す。**片付けられないものを作らない。**
+置き場所を増やすときは `/pd:uninstall` の対象一覧にも足す。**片付けられないものを作らない。**
 
 ### 旧レイアウトを読めなくしない
 
-v1.4.0 より前は root 直下だった。`validate.py` の `BASE`（`_base_dir()`）が両方を読む。**この分岐を消すと、既存プロジェクトが更新した瞬間に全ファイル「台帳にあるが存在しない」で落ちる。**
+v0.5.0 より前は root 直下だった。`validate.py` の `BASE`（`_base_dir()`）が両方を読む。**この分岐を消すと、既存プロジェクトが更新した瞬間に全ファイル「台帳にあるが存在しない」で落ちる。**
 
 台帳のキーは `BASE` からの相対パス。だから `pd/` へ移しても承認なしで通る。`ROOT` 相対に戻さないこと。`selftest.sh` の「旧レイアウトでも通る」がこれを見ている。
 
@@ -99,11 +99,11 @@ plugin の hook は、有効化した**全プロジェクト**で走る。pd と
 2. 変更をコミットしてから配る
 
 ```bash
-sh scripts/release.sh 1.3.0             # 版の書き換え → 検証 → コミット → タグ → push
-sh scripts/release.sh 1.3.0 --no-push   # 手元で止めて確認する
+sh scripts/release.sh 0.4.0             # 版の書き換え → 検証 → コミット → タグ → push
+sh scripts/release.sh 0.4.0 --no-push   # 手元で止めて確認する
 ```
 
-**版を手で書き換えない。** `plugin.json` / `marketplace.json` / `pd-init.md` の `ref` の3箇所を release.sh が揃えて書き換える。手でやると必ずどれかが取り残される。
+**版を手で書き換えない。** `plugin.json` / `marketplace.json` / `commands/init.md` の `ref` の3箇所を release.sh が揃えて書き換える。手でやると必ずどれかが取り残される。
 
 **未コミットのままタグを打たない。** タグが古い内容を指し、手元と CI で判定が食い違う。release.sh は作業ツリーが汚れていれば中止する（この事故が3回続いたため仕組みで止めている）。
 

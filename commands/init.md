@@ -4,7 +4,7 @@ description: pd を使うプロジェクトの置き場所・台帳・CI・規�
 
 # pd-init
 
-このプロジェクトで `/pd:pd` を使えるようにする。**既にあるものは上書きしない。**
+このプロジェクトで `/pd:analyze` を使えるようにする。**既にあるものは上書きしない。**
 
 ## 手順
 
@@ -29,11 +29,56 @@ pd/
 └── ledger.json     台帳（過去の記録の書き換えを検出する）
 ```
 
-`specs/` 以降は v2.0.0 で UI/UX の成果物を統合したもの。**UI/UX 専用の別ディレクトリを作らない**（`uiux/` のような並列の置き場所を作ると、同じ事実を二箇所に書くことになる）。
+`specs/` 以降は v0.6.0 で UI/UX の成果物を統合したもの。**UI/UX 専用の別ディレクトリを作らない**（`uiux/` のような並列の置き場所を作ると、同じ事実を二箇所に書くことになる）。
 
 空ディレクトリは残らないので、`pd/.local/README.md` に「ここに置いた元データは共有しない。作業後に消す」旨を書いて作る。他は最初のファイルが書かれた時点でできるため、**先に空フォルダを作らない**。
 
 3. **台帳を作る** — `pd/ledger.json` に `{}` を書く。このファイルの有無が「pd を使うプロジェクトか」の目印になり、無いと hook が動かない
+
+3.5 **固有の語彙の置き場所を作る** — plugin は業種の言葉を持たない。**このプロジェクトの言葉はここで決める**
+
+- `pd/voices/taxonomy.json` を**空の配列で**作る。埋まるまでは形式チェックだけが働く（導入直後を赤くしないため）
+
+```json
+{
+  "speaker_role": [],
+  "object": [],
+  "phase": []
+}
+```
+
+- `pd/specs/01-strategy/glossary.md` を雛形として作る。**中身は埋めない**（分かっていないことを埋めると、誰も決めていない定義が流通する）
+
+```markdown
+# 用語集（このプロダクト固有）
+
+共通の用語は plugin 側（`skills/analyze/uiux/glossary.md`）。ここには**このプロダクトの言葉だけ**を書く。
+
+## 1. 利用者の呼称
+
+| 呼称 | 定義 | `speaker_role` |
+|---|---|---|
+| 未定義 | | |
+
+> 「ユーザー」を単独で使わない。必ずどの系統かを指定する。
+> 決めた呼称は `pd/voices/taxonomy.json` の `speaker_role` に入れる。
+
+## 2. 主要タスク時間
+
+利用者系統ごとに1つ定義し、**必ず要素に分解する**。
+
+| 系統 | 主要タスク時間 | 要素 |
+|---|---|---|
+| 未定義 | | |
+
+> 部分の改善を全体の改善と呼ばない。
+
+## 3. 業務用語
+
+| 用語 | 定義 |
+|---|---|
+| 未定義 | |
+```
 
 4. **`.gitignore`** — 無ければ作る。あれば次の行が無い場合だけ追記する
 
@@ -64,7 +109,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: monkeikawashima/pd-plugin
-          ref: v2.1.0
+          ref: v0.7.0
           path: .pd-plugin
       - name: 規約を検証する
         run: python3 .pd-plugin/scripts/validate.py
@@ -74,20 +119,21 @@ jobs:
 
 6. **CLAUDE.md** — 無ければ作り、あれば「pd の規約」節を追記する（既にあれば触らない）。内容は次を含める
 
-- 判定者は1つ。`/pd:pd-validate` が唯一の判定者で、人の解釈で合否を決めない
-- pd が作るものは `pd/` 配下に置く。やめるときは `/pd:pd-uninstall`
+- 判定者は1つ。`/pd:validate` が唯一の判定者で、人の解釈で合否を決めない
+- pd が作るものは `pd/` 配下に置く。やめるときは `/pd:uninstall`
 - `pd/products/` と `pd/specs/` は上書き、`pd/analyses/` `pd/voices/` `pd/simulations/` `pd/decisions/` `pd/validations/` `pd/measurements/` `pd/reviews/` は追記のみ
 - Evidence には `Fact` / `Interpretation` / `Hypothesis` / `Unknown` のいずれかを付ける
 - 元データ・個人情報を置かない。`pd/voices/` は匿名化してから記録する
 - 索引ファイルを作らない。ボイスの一覧は `voices.mjs query` / `stats` で取る
+- 利用者の呼称・オブジェクト名・業務用語は `pd/specs/01-strategy/glossary.md` で決める。plugin 側には無い
 - UI/UX の作業は `ux-layer-triage` から始める。UI を作る/直す前に対象画面のボイスを引き当てる
 - 台帳に無い改善案は「デザイナー起案」と明記する
 - 過去の Note を修正しない。認識が変わったら新しい Note を追加する
 
-7. **最初の Context** — 対象プロダクトが分かっていれば、plugin の `skills/pd/products/_template.md` を Schema として `pd/products/{product-name}.md` を作る。分からなければ作らず、`/pd:pd` の初回実行時に作ると伝える
+7. **最初の Context** — 対象プロダクトが分かっていれば、plugin の `skills/analyze/products/_template.md` を Schema として `pd/products/{product-name}.md` を作る。分からなければ作らず、`/pd:analyze` の初回実行時に作ると伝える
 
-8. **検証** — `/pd:pd-validate` を実行し、違反が出ないことを確認してから完了を報告する
+8. **検証** — `/pd:validate` を実行し、違反が出ないことを確認してから完了を報告する
 
 ## 報告
 
-作ったものと、作らなかったもの（既にあったため）を分けて伝える。最後に「`/pd:pd {プロダクト名}` で分析を始められる」ことを1行で示す。
+作ったものと、作らなかったもの（既にあったため）を分けて伝える。最後に「`/pd:analyze {プロダクト名}` で分析を始められる」ことを1行で示す。

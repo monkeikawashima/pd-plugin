@@ -1,4 +1,5 @@
 ---
+product: <プロダクト名。置き場所のフォルダ名と一致させる>
 date: YYYY-MM-DD
 layer: 戦略 | 要件 | 構造 | 骨格 | 表層
 kind: 決定 | 未決定 | 作業仮説 | 棄却
@@ -7,6 +8,10 @@ related_specs: []
 related_voices: []
 status: 有効 | 差し戻し | 上書き済み
 ---
+
+<!-- 置き場所: pd/decisions/{プロダクト}/{年}/UXDR-YYYYMMDD-NN-<slug>.md
+     年は date の年。product は frontmatter とフォルダ名が一致していること -->
+
 
 # UXDR-YYYYMMDD-NN — <一行タイトル>
 
@@ -35,7 +40,7 @@ status: 有効 | 差し戻し | 上書き済み
 |---|---|---|
 | 一次情報 | … | VOICE-xxx |
 | 上位層の成果物 | … | pd/specs/… |
-| 計測値 | … / **未取得** | pd/measurements/MP-… |
+| 計測値 | … / **未取得** | pd/measurements/{プロダクト}/{年}/MP-… |
 
 > 計測値が無い場合は空欄にせず **「未取得」** と書く。それらしい数字を置かない。
 

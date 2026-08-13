@@ -25,7 +25,7 @@ phase: <フェーズ / 未定義>
 ## 顧客ボイスの引き当て
 
 ```bash
-pnpm voices query --screen <画面名>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --screen <画面名>
 ```
 
 | ID | type | 内容の要点 | この画面での扱い |

@@ -7,11 +7,11 @@
 規約を書いた文書と、判定するコードは別々に育つ。片方だけ変えると
 「文書どおりに書いたのに弾かれる」という、原因の分かりにくい事故になる。
 人はドキュメントを見て書き、検証器がそれを弾くため、現場にはどちらが
-正しいかを判断する材料が無い（skills/pd/uiux/rules/05-operations.md §6）。
+正しいかを判断する材料が無い（skills/analyze/uiux/rules/05-operations.md §6）。
 
 一致を注意力に委ねず、ここで機械的に突き合わせる。
 
-    skills/pd/uiux/voice-schema.md   人が読む正本
+    skills/analyze/uiux/voice-schema.md   人が読む正本
     scripts/voices.mjs               記録するときに弾く
     scripts/validate.py              検証するときに弾く
 
@@ -26,15 +26,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# 突き合わせる項目。frequency は範囲（整数）なので enum ではない
-KEYS = ["type", "source", "speaker_role", "layer", "severity", "status"]
+# 突き合わせる項目。frequency は範囲（整数）なので enum ではない。
+# speaker_role は v1.0.0 で enum をやめた（業種で役割名が変わるため）。
+# 値の一致は見られなくなったが、形式の正規表現は3箇所に散るので、それを突き合わせる。
+KEYS = ["type", "source", "layer", "severity", "status"]
+
+# speaker_role の許容形式。3箇所すべてにこの文字列が現れること
+ROLE_PATTERN = "^[a-z][a-z0-9-]*$"
+ROLE_FILES = [
+    "skills/analyze/uiux/voice-schema.md",
+    "scripts/voices.mjs",
+    "scripts/validate.py",
+]
 
 errors: list[str] = []
 
 
 def from_schema_md() -> dict[str, set[str]]:
     """人が読む表から拾う。`| `type` | `a` / `b` | … |` の2列目。"""
-    text = (ROOT / "skills/pd/uiux/voice-schema.md").read_text(encoding="utf-8")
+    text = (ROOT / "skills/analyze/uiux/voice-schema.md").read_text(encoding="utf-8")
     out: dict[str, set[str]] = {}
     for line in text.split("\n"):
         m = re.match(r"^\|\s*`([a-z_]+)`\s*\|(.+?)\|", line)
@@ -98,6 +108,14 @@ def main() -> int:
         detail = "\n".join(f"      {n}: {' '.join(sorted(v))}" for n, v in got.items())
         errors.append(f"{key}: 3箇所で食い違っている\n{detail}")
 
+    # enum ではなくなった speaker_role は、形式が3箇所で揃っているかを見る。
+    # 片方だけ緩めると「文書どおりに書いたのに弾かれる」が再発する。
+    missing = [f for f in ROLE_FILES
+               if ROLE_PATTERN not in (ROOT / f).read_text(encoding="utf-8")]
+    if missing:
+        errors.append(f"speaker_role の形式 `{ROLE_PATTERN}` が "
+                      f"{' / '.join(missing)} に無い")
+
     if errors:
         print("スキーマが一致していません\n")
         for e in errors:
@@ -105,7 +123,7 @@ def main() -> int:
         print("\n3つすべてを同時に直す。片方だけ変えない。")
         return 1
 
-    print(f"✓ スキーマは一致している（{len(KEYS)} 項目 × 3箇所）")
+    print(f"✓ スキーマは一致している（enum {len(KEYS)} 項目 + speaker_role の形式 × 3箇所）")
     return 0
 
 

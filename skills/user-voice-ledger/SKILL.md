@@ -18,7 +18,11 @@ description: 利用者の生の声（ペイン・要望・否定的評価・効�
 
 ## 最初に読む
 
-**書く前に必ず `pd/voices/SCHEMA.md` を読む。** enum と必須キーは CLI が機械検査する。
+**書く前に必ず `${CLAUDE_PLUGIN_ROOT}/skills/analyze/uiux/voice-schema.md` を読む。**
+必須キー・enum・`speaker_role` の形式は CLI と `/pd:validate` が機械検査する。
+
+**役割（`speaker_role`）は plugin が決めない。** そのプロダクトの役割名を使い、
+固まったら `pd/voices/taxonomy.json` に列挙する（列挙した時点で表記ゆれが弾かれる）。
 
 ---
 
@@ -47,25 +51,27 @@ description: 利用者の生の声（ペイン・要望・否定的評価・効�
 ### 3. 重複を確認して統合する
 
 ```bash
-pnpm voices query --screen <画面名>
-pnpm voices query --type <type>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --screen <画面名>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --type <type>
 ```
 
 同一趣旨があれば**新規作成せず `frequency` を増やす**。逐語が異なるなら、両方を `## 逐語` に並べる。
 
 ### 4. 匿名化する
 
-実名・店名・電話番号・メールアドレスを匿名化ID（`G-01` / `S-03` など）に置換する。
+実名・組織名・電話番号・メールアドレスを匿名化ID（`U-01` / `O-03` など）に置換する。
 
 ### 5. 作成して検査する
 
 ```bash
-pnpm voices new --type <t> --source <s> --speaker_role <r> \
-  --speaker_id <id> --captured_at <YYYY-MM-DD> --captured_by <who> --slug <slug>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" new --product <p> --type <t> --source <s> \
+  --speaker_role <r> --speaker_id <id> --captured_at <YYYY-MM-DD> --captured_by <who> --slug <slug>
 # 逐語を貼る
-pnpm voices validate
-pnpm voices index
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" validate
 ```
+
+> 索引を作るコマンドは無い（v0.6.0 で廃止）。**一覧は `query` / `stats` で取る。**
+> 索引ファイルは更新漏れで実態と乖離する。
 
 `captured_at` は**発言された日**（受領日ではない）。
 
@@ -80,10 +86,10 @@ pnpm voices index
 **改善案を出す前に必ず実行する。**
 
 ```bash
-pnpm voices query --screen <画面名>
-pnpm voices query --screen <画面名> --type pain --status 未検証
-pnpm voices query --tag <タグ>       # 例: locale:en
-pnpm voices query --principle <n>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --screen <画面名>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --screen <画面名> --type pain --status 未検証
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --tag <タグ>       # 例: locale:en
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --principle <n>
 ```
 
 | 結果 | 扱い |
@@ -123,7 +129,7 @@ pnpm voices query --principle <n>
 
 - 逐語の書き換え・要約・敬語化・翻訳での置換
 - 解釈を `## 逐語` に混ぜる（解釈は `## 解釈` に `[推測]` 付きで）
-- 実名・店名・電話番号の記載
+- 実名・組織名・電話番号の記載
 - 出所（`source`）のない声の追加
 - 検証していないのに `status: 解消`
 - 引き当てずに改善案を出す（出す場合は「デザイナー起案」と明記）

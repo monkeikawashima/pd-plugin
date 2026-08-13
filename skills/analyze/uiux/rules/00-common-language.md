@@ -64,6 +64,6 @@ UI/UX の議論を「好み」で終わらせないための座標系。**発言
 
 ## 5. 関連
 
-- 層 × 役割の分担: `skills/pd/uiux/rules/01-layer-discipline.md`
-- 判断のルール（R1〜R6）: `skills/pd/uiux/rules/02-decision-rules.md`
-- 用語の定義: `skills/pd/uiux/glossary.md`
+- 層 × 役割の分担: `skills/analyze/uiux/rules/01-layer-discipline.md`
+- 判断のルール（R1〜R6）: `skills/analyze/uiux/rules/02-decision-rules.md`
+- 用語の定義: `skills/analyze/uiux/glossary.md`

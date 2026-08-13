@@ -42,7 +42,7 @@ description: 一意に決まらない論点を「棄却しうる形の仮説」�
 ### 2. 既存の未検証ペインを拾う
 
 ```bash
-pnpm voices query --type pain --status 未検証
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --type pain --status 未検証
 ```
 
 ### 3. 観測方法を決める
@@ -92,7 +92,7 @@ pnpm voices query --type pain --status 未検証
        観測方法: 行動=… / 発話=…
 
 ■ 停止している項目: <未定のもの。決める人 / いつまでに>
-■ 記録先: pd/validations/VP-YYYYMMDD-NN-<slug>.md
+■ 記録先: pd/validations/{プロダクト}/{年}/VP-YYYYMMDD-NN-<slug>.md
 ```
 
 ## 禁止

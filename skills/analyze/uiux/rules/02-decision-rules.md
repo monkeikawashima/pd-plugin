@@ -48,7 +48,7 @@
 
 ## R4. 決定は UXDR に残す
 
-決めたとき **と 決められなかったとき** の両方を `pd/decisions/UXDR-YYYYMMDD-NN-<slug>.md` に残す。
+決めたとき **と 決められなかったとき** の両方を `pd/decisions/{プロダクト}/{年}/UXDR-YYYYMMDD-NN-<slug>.md` に残す。
 
 未決定には次まで書く（書けない未決定は、未決定ですらない）:
 
@@ -77,15 +77,15 @@
 
 ```
 ✕ そのような機能は存在しない
-◯ <調査範囲: src/ の全 tsx を grep / 管理画面の実機確認> では確認できなかった
+◯ <調査範囲: アプリのソース全体を grep / 管理画面の実機確認> では確認できなかった
 ```
 
 必ず**調査範囲を添える**。範囲を書けないなら、それは調べていない。
-→ `skills/pd/uiux/rules/03-evidence-rules.md`
+→ `skills/analyze/uiux/rules/03-evidence-rules.md`
 
 ---
 
 ## 関連
 
-- 層の判定: `skills/pd/uiux/rules/00-common-language.md`
-- 記録の書式: `skills/pd/uiux/templates/uxdr.md`
+- 層の判定: `skills/analyze/uiux/rules/00-common-language.md`
+- 記録の書式: `skills/analyze/uiux/templates/uxdr.md`

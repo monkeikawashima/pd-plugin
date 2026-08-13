@@ -3,7 +3,7 @@
 """pd（Product Discovery）の規約検証。
 
 使い方:
-    /pd:pd-validate                                      Claude 経由（推奨）
+    /pd:validate                                      Claude 経由（推奨）
     python3 <plugin>/scripts/validate.py              全体を検証
     python3 <plugin>/scripts/validate.py <path>...    指定ファイルだけ検証
 
@@ -16,7 +16,7 @@
 このスクリプトは plugin 側にあり、判定される Note / Voice / Context は
 プロジェクト側にある。両者は別のリポジトリになりうる。
 
-規約の出典は skills/pd/SKILL.md と、プロジェクト側の CLAUDE.md。
+規約の出典は skills/analyze/SKILL.md と、プロジェクト側の CLAUDE.md。
 このスクリプトが唯一の判定者であり、規約を変えたらここも変える。
 違反があれば終了コード 1。
 """
@@ -43,20 +43,45 @@ def _project_root() -> Path:
     return Path.cwd().resolve()
 
 
+def _plugin_name(root: Path) -> str | None:
+    """`.claude-plugin/plugin.json` の name。plugin のソースでなければ None。"""
+    manifest = root / ".claude-plugin/plugin.json"
+    if not manifest.exists():
+        return None
+    try:
+        return json.loads(manifest.read_text(encoding="utf-8")).get("name")
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 # 検証対象のプロジェクト。plugin リポジトリ自身を指すこともある（自己検証）
 ROOT = _project_root()
-SELF_CHECK = ROOT == PLUGIN_ROOT
+
+# 自己検証かどうかを「パスが同じか」で決めない。
+# hook 経由では PLUGIN_ROOT が ~/.claude/plugins/… （インストール済みの複製）を
+# 指すため、plugin のソースを開いていてもパスは一致しない。その結果このリポジトリが
+# 「pd を使うプロジェクト」と誤認され、**plugin 自身の CI に不要な checkout を要求する**
+# 違反が毎ターン出ていた（v1.0.0 で修正）。**誤検知する判定は無視されるようになる。**
+#
+# 同じ plugin の別の複製かどうかは、マニフェストの name で見る。
+SELF_CHECK = ROOT == PLUGIN_ROOT or (
+    _plugin_name(ROOT) is not None and _plugin_name(ROOT) == _plugin_name(PLUGIN_ROOT)
+)
+
+# 自己検証のときは、インストール済みの複製ではなく**いま開いているソース**を見る
+if SELF_CHECK:
+    PLUGIN_ROOT = ROOT
 
 
 # 分析データの置き場所（プロジェクト側）
-# v2.0.0 で UI/UX の成果物（specs / decisions / validations / measurements / reviews）を
+# v0.6.0 で UI/UX の成果物（specs / decisions / validations / measurements / reviews）を
 # ここに統合した。UI/UX 専用の別ディレクトリを作らない（二重管理になるため）。
 DATA_DIRS = ("products", "analyses", "voices", "simulations",
              "specs", "decisions", "validations", "measurements", "reviews")
 
 
 def _base_dir() -> Path:
-    """分析データの根。v1.4.0 から `pd/` 配下に畳んだ。
+    """分析データの根。v0.5.0 から `pd/` 配下に畳んだ。
 
     畳んだ理由は、消したいときに「どれが pd のものか」が分からなかったこと。
     root 直下の `products/` `analyses/` は名前から出所が読めない。
@@ -75,7 +100,7 @@ def _base_dir() -> Path:
 
 
 # plugin 化より前は Context を skill の中に置いていた
-LEGACY_PRODUCTS = ROOT / ".claude/skills/pd/products"
+LEGACY_PRODUCTS = ROOT / ".claude/skills/analyze/products"
 
 BASE = _base_dir()
 # 表示用の接頭辞。旧レイアウトでは空になる
@@ -91,7 +116,7 @@ def _products_dir() -> Path:
 
 PRODUCTS_DIR = _products_dir()
 PRODUCTS_REL = str(PRODUCTS_DIR.relative_to(BASE))
-FRAMEWORK_DIR = PLUGIN_ROOT / "skills/pd/framework"
+FRAMEWORK_DIR = PLUGIN_ROOT / "skills/analyze/framework"
 
 RAW_EXT = {".csv", ".tsv", ".xlsx", ".sql", ".dump", ".sqlite", ".sqlite3",
            ".png", ".jpg", ".jpeg", ".pdf", ".mp3", ".m4a", ".wav"}
@@ -125,7 +150,7 @@ SURNAMES = """佐藤 鈴木 高橋 田中 伊藤 渡辺 山本 中村 小林 加
 # hook.py もこの位置を「pd を使うプロジェクトか」の目印にしている。
 LEDGER = ROOT / "pd/ledger.json"
 LEDGER_LOG = ROOT / "pd/ledger-log.md"
-ACCEPT_HINT = "/pd:pd-validate --accept で承認する"
+ACCEPT_HINT = "/pd:validate --accept で承認する"
 # 追記のみ（過去の記録を書き換えない）。specs は現在値なので含めない。
 # decisions / validations / measurements / reviews は「そのとき何を決めたか」の
 # 記録であり、後から書き換えると判断の経緯が消えるため追記のみに含める。
@@ -319,7 +344,7 @@ def frontmatter(text: str) -> dict[str, str]:
 
 PATTERNS = {
     "analyses": re.compile(r"^analyses/([a-z0-9-]+)/(\d{4})/(\d{8})-(\d{2})-([a-z][a-z0-9]*)\.md$"),
-    # v2.0.0: 1ファイル = 1声。ID で引き当てるため VOICE-NNN を名前に持つ。
+    # v0.6.0: 1ファイル = 1声。ID で引き当てるため VOICE-NNN を名前に持つ。
     # 年フォルダは captured_at（発言された日）の年。
     "voices": re.compile(r"^voices/([a-z0-9-]+)/(\d{4})/VOICE-(\d{3,})-([a-z][a-z0-9-]*)\.md$"),
     "simulations": re.compile(r"^simulations/([a-z0-9-]+)/(\d{4})/(\d{8})-([a-z][a-z0-9]*)\.md$"),
@@ -483,8 +508,8 @@ def check_sections(path: Path, text: str) -> None:
                     err(path, f"「{name}」に {label} が無い")
 
 
-# v2.0.0: 1ファイル = 1声。UI を直す前に screen で引き当てられるようにするため、
-# 分類キーを frontmatter に持たせる。書式の正本は skills/pd/uiux/voice-schema.md。
+# v0.6.0: 1ファイル = 1声。UI を直す前に screen で引き当てられるようにするため、
+# 分類キーを frontmatter に持たせる。書式の正本は skills/analyze/uiux/voice-schema.md。
 # **この2つは必ず一致させること**（人は文書を見て書き、ここが弾く、という事故を避ける）。
 VOICE_KEYS = ["id", "product", "type", "source", "speaker_role", "speaker_id",
               "captured_at", "captured_by", "layer", "severity", "frequency", "status"]
@@ -494,11 +519,40 @@ VOICE_ENUMS = {
     "type": {"pain", "request", "negative", "positive", "question"},
     "source": {"interview", "in-app-feedback", "review", "support-ticket",
                "sales-call", "meeting", "user-validation"},
-    "speaker_role": {"guest", "store-staff", "store-owner", "admin", "unknown"},
     "layer": {"戦略", "要件", "構造", "骨格", "表層", "未判定"},
     "severity": {"high", "medium", "low"},
     "status": {"未検証", "検証済み", "対応中", "解消", "却下"},
 }
+# v1.0.0: speaker_role は enum をやめた。役割の呼び名は業種で変わる（利用者 / 現場 / 管理者、
+# 患者 / 医師、受講者 / 講師 …）。plugin 側で固定すると特定業種の語彙を全利用者に強制する。
+# 値は pd/voices/taxonomy.json で各プロジェクトが宣言する。ここで見るのは形式だけ。
+ROLE_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+# taxonomy.json が非空の項目だけ、その中の値に縛る（プロダクト固有語彙）
+TAXONOMY_KEYS = ["object", "phase", "speaker_role"]
+
+_taxonomy_cache: dict[str, list[str]] | None = None
+
+
+def load_taxonomy() -> dict[str, list[str]]:
+    """`pd/voices/taxonomy.json`。無ければ空（＝縛らない）。
+
+    固有語彙は plugin ではなくプロジェクトが持つ。宣言されたときだけ縛る。
+    """
+    global _taxonomy_cache
+    if _taxonomy_cache is None:
+        _taxonomy_cache = {}
+        path = BASE / "voices/taxonomy.json"
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                err(path, "JSON として読めない")
+                data = {}
+            for key in TAXONOMY_KEYS:
+                val = data.get(key)
+                if isinstance(val, list):
+                    _taxonomy_cache[key] = [str(v) for v in val]
+    return _taxonomy_cache
 SPEAKER_ID = re.compile(r"[^\s（(]+[A-Z]-\d+")
 QUOTE_FORM = re.compile(r"^[^\s:：]*[A-Za-z]-\d+[^:：]*[:：]")
 VOICE_ID = re.compile(r"^VOICE-(\d{3,})$")
@@ -515,12 +569,25 @@ def check_voice(path: Path) -> None:
     for key in fm:
         if key not in VOICE_KEYS and key not in VOICE_OPTIONAL:
             err(path, f"未知の frontmatter キー「{key}」。"
-                      f"スキーマを勝手に増やさない（正本: skills/pd/uiux/voice-schema.md）")
+                      f"スキーマを勝手に増やさない（正本: skills/analyze/uiux/voice-schema.md）")
 
     for key, allowed in VOICE_ENUMS.items():
         val = fm.get(key)
         if val and val not in allowed:
             err(path, f"{key} が不正: 「{val}」（許容: {' / '.join(sorted(allowed))}）")
+
+    role = fm.get("speaker_role", "")
+    if role and not ROLE_RE.match(role):
+        err(path, f"speaker_role の形式が不正: 「{role}」"
+                  f"（英小文字・数字・ハイフンのみ。例: end-user）")
+
+    taxonomy = load_taxonomy()
+    for key in TAXONOMY_KEYS:
+        allowed = taxonomy.get(key) or []
+        val = fm.get(key)
+        if allowed and val and val not in allowed:
+            err(path, f"{key} が taxonomy.json にない: 「{val}」"
+                      f"（許容: {' / '.join(allowed)}）")
 
     if got:
         product, year, num = got
@@ -542,7 +609,7 @@ def check_voice(path: Path) -> None:
     # frontmatter の speaker_id を数えないよう、本文だけを見る
     body = text.split("---", 2)[2] if text.startswith("---") and text.count("---") >= 2 else text
     if not SPEAKER_ID.search(body):
-        err(path, "発話者が ID 形式で書かれていない（例: 利用者A-1 / 店舗B-2）")
+        err(path, "発話者が ID 形式で書かれていない（例: 利用者A-1 / 運用者B-2）")
 
     for i, line in enumerate(text.split("\n"), 1):
         t = line.strip()
@@ -562,7 +629,7 @@ def check_voice(path: Path) -> None:
                     break
 
 
-# ------------------------------------------------------- UI/UX の成果物（v2.0.0）
+# ------------------------------------------------------- UI/UX の成果物（v0.6.0）
 
 UXDR_KEYS = ["product", "date", "layer", "kind", "status"]
 UXDR_KINDS = {"決定", "未決定", "作業仮説", "棄却"}
@@ -689,15 +756,15 @@ PLUGIN_FILES = [
     ".claude-plugin/plugin.json",
     ".claude-plugin/marketplace.json",
     "hooks/hooks.json",
-    "commands/pd-init.md",
-    "commands/pd-validate.md",
-    "commands/pd-uninstall.md",
+    "commands/init.md",
+    "commands/validate.md",
+    "commands/uninstall.md",
     "scripts/validate.py",
     "scripts/hook.py",
     "scripts/selftest.sh",
     "scripts/release.sh",
-    "skills/pd/SKILL.md",
-    "skills/pd/products/_template.md",
+    "skills/analyze/SKILL.md",
+    "skills/analyze/products/_template.md",
     ".github/workflows/validate.yml",
     "CHANGELOG.md",
 ]
@@ -726,15 +793,101 @@ def check_plugin_guards() -> None:
 
     check_hook_entrypoint()
     check_command_names()
+    check_plugin_is_generic()
+    check_documented_paths()
 
 
-# plugin のスキルは必ず「plugin名:スキル名」に名前空間化される。素の `/pd-init`
+# 記録ファイルの置き場所は「pd/{種別}/{プロダクト}/{年}/{接頭辞}-…」で統一されている。
+# 文書がこれを省いた形（pd/decisions/UXDR-… ）で案内すると、そのとおりに書いた
+# ファイルが検証器に落ちる。**書いた人には、どちらが正しいか判断する材料が無い。**
+#
+# v0.6.0 で置き場所を変えたとき、検証器と SKILL.md は直ったが UI/UX 側のスキル5本と
+# テンプレート2本が取り残された（v1.0.0 で発見）。注意力では防げないのでここで見る。
+FLAT_RECORD_PATH = re.compile(
+    r"pd/(analyses|voices|simulations|decisions|validations|measurements|reviews)/"
+    r"(UXDR-|VP-|MP-|DR-|VOICE-|\d{4})"
+)
+
+
+def check_documented_paths() -> None:
+    """文書が案内する記録の置き場所が、検証器の期待と揃っているか。"""
+    targets = sorted((PLUGIN_ROOT / "skills").rglob("*.md")) \
+        + sorted((PLUGIN_ROOT / "commands").glob("*.md"))
+    for path in targets:
+        rel = path.relative_to(PLUGIN_ROOT)
+        for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            m = FLAT_RECORD_PATH.search(line)
+            if m:
+                kind = m.group(1)
+                err(rel, f"案内している置き場所に {{プロダクト}}/{{年}} が無い: "
+                         f"{m.group(0)!r}（期待: {BASE_REL}{EXPECTED[kind]}）", i)
+
+
+# 配布物に混ざってはいけないもの。plugin は「思考の型」を配る。特定プロダクトの
+# 語彙や、元プロジェクトの実装パスが残っていると、他のプロダクトで
+# 間違った言葉と存在しないファイルを強制することになる（v1.0.0 で一度混入した）。
+#
+# ここが空振りしても「固有物が無い」証明にはならない。辞書は当たった分しか見えない。
+# 判定を足すのは、実際に混入を見つけたとき。
+
+# 元プロジェクトの実装に依存する参照。これは網羅的に効く（存在しないパスは必ず壊れる）
+FOREIGN_PATHS = [
+    (".devin/", "元プロジェクトの規約ディレクトリ"),
+    ("src/", "利用プロジェクトのソース構成に依存する"),
+    (".next", "特定フレームワークのビルド出力"),
+    ("pnpm ", "plugin に package.json は無い。node で直接呼ぶ"),
+    (".claude/skills/", "plugin のスキルはここには置かれない"),
+]
+
+# 業種の語彙。反例として並べている行（✗ / ❌ / 「書かない」）は対象外
+INDUSTRY_WORDS = [
+    "店舗", "来店", "飲食", "小売", "客席", "宿泊", "患者", "受講",
+    "予約完了時間", "予約対応時間", "訪日",
+]
+COUNTER_EXAMPLE = ("✗", "❌", "書かない", "書き込まない", "禁止")
+
+
+def check_plugin_is_generic() -> None:
+    """skills/ に固有プロダクトの語彙・実装パスが残っていないか。
+
+    この判定が無かったため、飲食予約サービスの業務定義が配布物に
+    そのまま入り、他プロダクトで使えない状態が v0.7.0 まで残った。
+    """
+    for path in sorted((PLUGIN_ROOT / "skills").rglob("*.md")):
+        rel = path.relative_to(PLUGIN_ROOT)
+        for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            for token, why in FOREIGN_PATHS:
+                if token in line:
+                    err(rel, f"配布物に外部プロジェクトの参照がある: {token!r}"
+                             f"（{why}）", i)
+            if any(c in line for c in COUNTER_EXAMPLE):
+                continue
+            for word in INDUSTRY_WORDS:
+                if word in line:
+                    err(rel, f"配布物に業種固有の語がある: 「{word}」"
+                             f"（固有の語彙は利用プロジェクト側の "
+                             f"pd/specs/01-strategy/glossary.md に置く）", i)
+
+
+# plugin のスキルは必ず「plugin名:スキル名」に名前空間化される。素の `/init`
 # と書くと、そのとおり打った利用者は「コマンドが無い」で終わる。
-BARE_COMMAND = re.compile(r"(?<![\w:/])/pd(-init|-validate|-uninstall)?(?![\w:\-])")
+#
+# v1.0.0 でコマンド名から `pd-` の接頭辞を外した（`/pd:pd-init` → `/pd:init`）。
+# 素の名前が `init` / `validate` のような普通の英単語になったため、
+# **直前が語・`/`・`:` のときは対象外にする**（`scripts/validate.py` や
+# `pd/validations/` を誤検知させない）。旧名も残骸として拾う。
+BARE_COMMAND = re.compile(
+    r"(?<![\w:/])/(analyze|init|validate|uninstall"
+    r"|pd|pd-init|pd-validate|pd-uninstall)(?![\w:\-/])"
+)
+
+# 旧名で書かれていたときに、何と書き直せばよいかを示す
+RENAMED = {"pd": "analyze", "pd-init": "init",
+           "pd-validate": "validate", "pd-uninstall": "uninstall"}
 
 DOCS = ["README.md", "CLAUDE.md", "pd-skill-blueprint.md",
-        "commands/pd-init.md", "commands/pd-validate.md",
-        "commands/pd-uninstall.md", "skills/pd/SKILL.md"]
+        "commands/init.md", "commands/validate.md",
+        "commands/uninstall.md", "skills/analyze/SKILL.md"]
 
 
 def check_command_names() -> None:
@@ -745,8 +898,9 @@ def check_command_names() -> None:
         for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
             m = BARE_COMMAND.search(line)
             if m:
+                got = m.group(1)
                 err(path, f"コマンド名に名前空間が無い: {m.group(0)!r} "
-                          f"（実際に使えるのは /pd:pd{m.group(1) or ''}）", i)
+                          f"（実際に使えるのは /pd:{RENAMED.get(got, got)}）", i)
 
 
 # hooks.json に書くとシェルに依存するもの。Windows には sh も jq も無いため、
@@ -816,7 +970,7 @@ def check_version_consistency() -> None:
 
     # pd-init が利用プロジェクトの CI に焼き込む版。古いまま配ると、
     # 初期状態から手元（最新）と CI（旧版）で判定が食い違う。
-    init = PLUGIN_ROOT / "commands/pd-init.md"
+    init = PLUGIN_ROOT / "commands/init.md"
     if init.exists():
         refs = re.findall(r"ref:\s*v([\d.]+)", init.read_text(encoding="utf-8"))
         for ref in refs:
@@ -834,12 +988,12 @@ def check_project_guards() -> None:
     # 履歴の代わりに台帳が必須（版管理を前提にしない）
     if not LEDGER.exists() and "--accept" not in sys.argv:
         errors.append("pd/ledger.json: 無い（過去の記録の書き換えを検出できない）。"
-                      "/pd:pd-init で作成する")
+                      "/pd:init で作成する")
 
     ci = ROOT / ".github/workflows/validate.yml"
     if not ci.exists():
         errors.append(".github/workflows/validate.yml: 無い（検証の仕組みが不完全）。"
-                      "/pd:pd-init で作成する")
+                      "/pd:init で作成する")
     else:
         # runner の既定は UTC。台帳の「当日」判定がずれ、手元で通る同日の修正が
         # CI でだけ落ちる。
@@ -973,7 +1127,7 @@ def main() -> int:
         print("規約違反が見つかりました\n")
         for e in errors:
             print(f"  ✗ {e}")
-        print(f"\n{len(errors)} 件。規約の出典: CLAUDE.md / pd plugin の skills/pd/SKILL.md")
+        print(f"\n{len(errors)} 件。規約の出典: CLAUDE.md / pd plugin の skills/analyze/SKILL.md")
         if warnings:
             print(f"\n警告 {len(warnings)} 件（止めません）")
             for w in warnings:

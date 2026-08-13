@@ -1,5 +1,5 @@
 ---
-name: pd
+name: analyze
 description: >
   プロダクトの課題、KPI、利用状況、UX、効果検証を分析し、
   Root Cause、改善Driver、仮説、Experiment、意思決定まで導く
@@ -40,9 +40,9 @@ plugin 側（全プロジェクト共通。/plugin update で上書きされる�
 
 **`pd/` の1段は省略しない。** pd が作るものを1箇所に集めているのは、やめるときに「どれが pd のものか」が分かるようにするため。
 
-**例外**: root 直下に `products/` `analyses/` があるプロジェクトは v1.4.0 より前のレイアウト。**移動せず、そのレイアウトに合わせて書く**（検証器も両方を読む）。
+**例外**: root 直下に `products/` `analyses/` があるプロジェクトは v0.5.0 より前のレイアウト。**移動せず、そのレイアウトに合わせて書く**（検証器も両方を読む）。
 
-プロジェクト側の置き場所がまだ無い場合は `/pd:pd-init` で作る。
+プロジェクト側の置き場所がまだ無い場合は `/pd:init` で作る。
 
 順序が本質。フレームワークは共通、分析は共通ではない。
 KPI Tree・User Journey・Driver は、**対象プロダクトの Context から毎回組み立てる**。他プロダクトのものを流用しない。Context が揃う前に組み立てない。
@@ -81,7 +81,7 @@ KPI Tree・User Journey・Driver は、**対象プロダクトの Context から
 
 分析の前に、必ず対象プロダクトを特定する。
 
-- `/pd:pd product-a` のようにプロダクト名が指定された場合は `products/product-a.md` を参照する
+- `/pd:analyze product-a` のようにプロダクト名が指定された場合は `products/product-a.md` を参照する
 - 指定が無い場合は、現在の作業対象から判断し、該当する `products/{product-name}.md` があれば参照する
 - 該当ファイルが無い場合は、`products/_template.md` の項目を Schema として、実行時に Context を構築する
 
@@ -143,7 +143,7 @@ Note が1件も無い場合、この Step は不要。既存 Note を全件読�
 - `framework/kpi.md` — KPI Tree、KPI Driver Analysis、Leading / Lagging、Segment 分析、変化が観測されないときの読み方、成果指標に載らない価値
 - `framework/experiment.md` — Hypothesis の検証設計、Experiment、Decision、期限のある判断
 
-## UI/UX の作業（v2.0.0 で統合）
+## UI/UX の作業（v0.6.0 で統合）
 
 **UI・UX の話が出たら、この Skill ではなく専用スキルから始める。**この Skill は推論の流れ
 （問題 → 原因 → 仮説 → 検証 → 決定）を担当し、UI/UX スキルは**抽象度の階層**
@@ -165,7 +165,7 @@ Note が1件も無い場合、この Step は不要。既存 Note を全件読�
 | 9 | 決めた／決められなかった | `ux-decision-record` |
 | 10 | 上流の前提が変わった | `ux-update-cascade` |
 
-規律の実体は `skills/pd/uiux/` にある。
+規律の実体は `skills/analyze/uiux/` にある。
 
 - `uiux/rules/` — 共通言語 / 層の規律 / 決定規則 / 証拠規則 / アクセシビリティ / 運用の劣化と対処
 - `uiux/templates/` — 画面仕様 / ユーザーストーリー / UXDR / 検証計画
@@ -371,7 +371,7 @@ pd/voices/{product-name}/{YYYY}/VOICE-NNN-{slug}.md
 機会単位でまとめると `screen` で引けなくなる。**引けない台帳は無いのと同じ。**
 年フォルダは `captured_at`（発言された日）の年。
 
-frontmatter は12個の必須キーを持つ（正本: `skills/pd/uiux/voice-schema.md`）。
+frontmatter は12個の必須キーを持つ（正本: `skills/analyze/uiux/voice-schema.md`）。
 
 ```
 ---
@@ -379,8 +379,8 @@ id: VOICE-001
 product: {product-name}
 type: pain | request | negative | positive | question
 source: interview | in-app-feedback | review | support-ticket | sales-call | meeting | user-validation
-speaker_role: guest | store-staff | store-owner | admin | unknown
-speaker_id: G-01          # 匿名化ID。実名・店名・連絡先を書かない
+speaker_role: end-user    # enum ではない。役割はプロダクトが決める（形式: ^[a-z][a-z0-9-]*$）
+speaker_id: U-01          # 匿名化ID。実名・組織名・連絡先を書かない
 captured_at: YYYY-MM-DD   # 発言された日（受領日ではない）
 captured_by: 記録者
 layer: 戦略 | 要件 | 構造 | 骨格 | 表層 | 未判定
@@ -411,7 +411,7 @@ status: 未検証 | 検証済み | 対応中 | 解消 | 却下
 利用者A-1（小規模・導入3ヶ月）: 「前のやり方のほうが早い」
 ```
 
-- 発話者は **`役割 + 英大文字 + ハイフン + 数字`** の ID（`利用者A-1` / `店舗B-2`）
+- 発話者は **`役割 + 英大文字 + ハイフン + 数字`** の ID（`利用者A-1` / `運用者B-2`）
 - **発話を含む行は必ず ID から始める。** 実名が入り込む余地を形式で消す
 - 逐語が取れなかった場合は「逐語なし」と書き、`severity` を**一段下げる**
 - 各件に文脈とどう聞いたかを添える（書式は `framework/discovery.md` の Voice を参照）

@@ -5,11 +5,14 @@
  *   node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" <new|validate|query|stats> [options]
  *
  * 依存パッケージ0（Node 標準モジュールのみ）。
- * スキーマの正本は plugin の skills/pd/uiux/voice-schema.md と scripts/validate.py。
+ * スキーマの正本は plugin の skills/analyze/uiux/voice-schema.md と scripts/validate.py。
  * **この3つは必ず一致させること。**
  *
- * v2.0.0: 置き場所を pd/voices/{プロダクト}/{年}/ に変更し、index コマンドを廃止した。
+ * v0.6.0: 置き場所を pd/voices/{プロダクト}/{年}/ に変更し、index コマンドを廃止した。
  * 索引ファイルは更新漏れで実態と乖離する（pd の規約）。一覧は query / stats で取る。
+ *
+ * v1.0.0: speaker_role の enum を廃止した。役割の呼び名は業種で変わるため、
+ * plugin 側で固定できない。形式だけ縛り、値は taxonomy.json で各プロジェクトが決める。
  */
 
 import fs from "node:fs";
@@ -36,7 +39,7 @@ const TAXONOMY = path.join(VOICES_DIR, "taxonomy.json");
 const ID_PREFIX = "VOICE";
 
 // ---------------------------------------------------------------- スキーマ定義
-// skills/pd/uiux/voice-schema.md および scripts/validate.py と完全に一致させる
+// skills/analyze/uiux/voice-schema.md および scripts/validate.py と完全に一致させる
 const REQUIRED_KEYS = [
   "id",
   "product",
@@ -74,11 +77,16 @@ const ENUMS = {
     "meeting",
     "user-validation",
   ],
-  speaker_role: ["guest", "store-staff", "store-owner", "admin", "unknown"],
   layer: ["戦略", "要件", "構造", "骨格", "表層", "未判定"],
   severity: ["high", "medium", "low"],
   status: ["未検証", "検証済み", "対応中", "解消", "却下"],
 };
+
+// v1.0.0: speaker_role は enum をやめた。役割の呼び名はプロダクトごとに違い、
+// plugin 側で固定すると特定業種の語彙を全利用者に強制することになる。
+// 値は各プロジェクトが決め、taxonomy.json に列挙すればそこで縛られる（object / phase と同じ）。
+// ここで見るのは形式だけ。表記ゆれ（Staff / 店舗スタッフ / store staff）を防ぐため。
+const ROLE_RE = /^[a-z][a-z0-9-]*$/;
 
 const SECTIONS = ["## 逐語", "## 文脈", "## 解釈", "## 派生"];
 
@@ -173,12 +181,17 @@ function listEntries() {
 }
 
 function readTaxonomy() {
-  if (!fs.existsSync(TAXONOMY)) return { object: [], phase: [] };
+  const empty = { object: [], phase: [], speaker_role: [] };
+  if (!fs.existsSync(TAXONOMY)) return empty;
   try {
     const t = JSON.parse(fs.readFileSync(TAXONOMY, "utf8"));
-    return { object: t.object || [], phase: t.phase || [] };
+    return {
+      object: t.object || [],
+      phase: t.phase || [],
+      speaker_role: t.speaker_role || [],
+    };
   } catch {
-    return { object: [], phase: [] };
+    return empty;
   }
 }
 
@@ -228,6 +241,12 @@ function validateEntry(entry, taxonomy, seenIds) {
     }
   }
 
+  if (data.speaker_role !== undefined && !ROLE_RE.test(String(data.speaker_role))) {
+    errs.push(
+      `speaker_role の形式が不正: "${data.speaker_role}"（英小文字・数字・ハイフンのみ。例: end-user）`,
+    );
+  }
+
   const idRe = new RegExp(`^${ID_PREFIX}-\\d{3,}$`);
   if (data.id !== undefined) {
     if (!idRe.test(String(data.id))) {
@@ -264,7 +283,7 @@ function validateEntry(entry, taxonomy, seenIds) {
   }
 
   // taxonomy が非空のときだけ検査（プロダクト固有語彙のため）
-  for (const k of ["object", "phase"]) {
+  for (const k of ["object", "phase", "speaker_role"]) {
     const allowed = taxonomy[k];
     if (allowed.length > 0 && data[k] !== undefined && !allowed.includes(String(data[k]))) {
       errs.push(`${k} が taxonomy.json にない: "${data[k]}"（許容: ${allowed.join(" / ")}）`);
@@ -331,7 +350,7 @@ function cmdNew(args) {
     console.log(`使い方:
   voices.mjs new --product <プロダクト名> --type <${ENUMS.type.join("|")}> \\
     --source <${ENUMS.source.join("|")}> \\
-    --speaker_role <${ENUMS.speaker_role.join("|")}> \\
+    --speaker_role <役割。英小文字・数字・ハイフン。例: end-user> \\
     --speaker_id <匿名化ID> --captured_at <YYYY-MM-DD> --captured_by <記録者> \\
     --slug <english-slug> [--screen <画面名>] [--severity <high|medium|low>]`);
     return;
@@ -340,7 +359,15 @@ function cmdNew(args) {
   const missing = NEW_REQUIRED.filter((k) => !args[k] || args[k] === true);
   if (missing.length) die(`引数が足りない: ${missing.map((m) => "--" + m).join(" ")}\n  詳しくは: voices.mjs new --help`);
 
-  for (const k of ["type", "source", "speaker_role"]) {
+  if (!ROLE_RE.test(String(args.speaker_role))) {
+    die(`--speaker_role の形式が不正: "${args.speaker_role}"（英小文字・数字・ハイフンのみ。例: end-user）`);
+  }
+  const roles = readTaxonomy().speaker_role;
+  if (roles.length > 0 && !roles.includes(String(args.speaker_role))) {
+    die(`--speaker_role が taxonomy.json にない: "${args.speaker_role}"（許容: ${roles.join(" / ")}）`);
+  }
+
+  for (const k of ["type", "source"]) {
     if (!ENUMS[k].includes(args[k])) die(`--${k} が不正: "${args[k]}"（許容: ${ENUMS[k].join(" / ")}）`);
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(args.captured_at)) die("--captured_at は YYYY-MM-DD");
@@ -499,6 +526,6 @@ switch (sub) {
   実行: node "\${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" <サブコマンド>
 
 台帳: ${path.relative(ROOT, VOICES_DIR)}
-スキーマ: uiux/voices/SCHEMA.md`);
+スキーマ: \${CLAUDE_PLUGIN_ROOT}/skills/analyze/uiux/voice-schema.md`);
     if (sub) process.exit(1);
 }

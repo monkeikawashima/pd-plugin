@@ -21,7 +21,7 @@ description: UI/UX の要望・課題を受け付け、5段階モデル（戦略
 
 | ファイル | 何のために |
 |---|---|
-| `skills/pd/uiux/rules/00-common-language.md` | 5層の定義 |
+| `skills/analyze/uiux/rules/00-common-language.md` | 5層の定義 |
 | `pd/specs/00-status.md` | どの層まで成果物があるか |
 | `pd/specs/01-strategy/concept.md` | 還元テストの対象 |
 

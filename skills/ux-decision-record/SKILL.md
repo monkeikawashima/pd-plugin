@@ -25,8 +25,8 @@ description: UI/UX に関して決めたこと・決めなかったこと・置�
 
 ## 手順
 
-1. `skills/pd/uiux/templates/uxdr.md` をコピーする
-2. ファイル名: `pd/decisions/UXDR-YYYYMMDD-NN-<slug>.md`（`NN` は同日内の連番）
+1. `skills/analyze/uiux/templates/uxdr.md` をコピーする
+2. ファイル名: `pd/decisions/{プロダクト}/{年}/UXDR-YYYYMMDD-NN-<slug>.md`（`NN` は同日内の連番）
 3. 埋める
 4. `pd/specs/00-status.md` を更新したか確認する
 
@@ -48,7 +48,7 @@ description: UI/UX に関して決めたこと・決めなかったこと・置�
 |---|---|
 | 一次情報 | `VOICE-xxx` |
 | 上位層の成果物 | `pd/specs/…` |
-| 計測値 | `pd/measurements/MP-…` |
+| 計測値 | `pd/measurements/{プロダクト}/{年}/MP-…` |
 
 **計測値が無ければ「未取得」と書く。** 空欄にしない。それらしい数字を置かない。
 
@@ -61,7 +61,7 @@ description: UI/UX に関して決めたこと・決めなかったこと・置�
 ## 出力形式
 
 ```
-■ ファイル: pd/decisions/UXDR-YYYYMMDD-NN-<slug>.md
+■ ファイル: pd/decisions/{プロダクト}/{年}/UXDR-YYYYMMDD-NN-<slug>.md
 ■ 層 / 区分: <層> / <決定 | 未決定 | 作業仮説 | 棄却>
 
 ■ 決めたこと

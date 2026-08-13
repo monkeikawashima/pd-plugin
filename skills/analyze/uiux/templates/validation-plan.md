@@ -6,6 +6,10 @@ related_specs: []
 related_voices: []
 ---
 
+<!-- 置き場所: pd/validations/{プロダクト}/{年}/VP-YYYYMMDD-NN-<slug>.md
+     年は date の年 -->
+
+
 # VP-YYYYMMDD-NN — <一行タイトル>
 
 ## 段取り（人間が決める。決まるまで「未定」と書いて停止する）

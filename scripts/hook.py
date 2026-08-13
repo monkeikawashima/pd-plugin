@@ -29,16 +29,16 @@ VALIDATE = PLUGIN_ROOT / "scripts" / "validate.py"
 # 検証器が走ると毎回違反を出すため、この目印が無ければ何もしない。
 MARKER = Path("pd") / "ledger.json"
 
-# 検証の対象になるディレクトリ（プロジェクト側）。v1.4.0 から `pd/` 配下に
+# 検証の対象になるディレクトリ（プロジェクト側）。v0.5.0 から `pd/` 配下に
 # 畳んだが、root 直下で運用している既存プロジェクトもそのまま拾う。
 WATCHED = ("analyses", "voices", "simulations", "products")
 BASE_DIR = "pd"
 
 # 変更したら pd-skill-blueprint.md の同期が要るファイル（plugin 側）
 SKILL_PARTS = (
-    "skills/pd/SKILL.md",
-    "skills/pd/framework/",
-    "skills/pd/products/_template.md",
+    "skills/analyze/SKILL.md",
+    "skills/analyze/framework/",
+    "skills/analyze/products/_template.md",
 )
 
 SYNC_MESSAGE = (

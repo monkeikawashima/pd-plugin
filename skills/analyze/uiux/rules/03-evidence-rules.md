@@ -84,5 +84,5 @@ spec・モック・ドキュメントに置いた数値は、**必ずどちら�
 
 ## 関連
 
-- 台帳のスキーマ: `pd/voices/SCHEMA.md`
-- 計測の設計: `.claude/skills/ux-measurement/SKILL.md`
+- 台帳のスキーマ: `${CLAUDE_PLUGIN_ROOT}/skills/analyze/uiux/voice-schema.md`
+- 計測の設計: `${CLAUDE_PLUGIN_ROOT}/skills/ux-measurement/SKILL.md`

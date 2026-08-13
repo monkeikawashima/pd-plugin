@@ -19,7 +19,7 @@ description: 主要タスクの完了時間を構成要素に分解して定義�
 ## 最初に読む
 
 `pd/specs/01-strategy/kpi.md`（時間側・品質側の定義とベースラインの有無）
-`skills/pd/uiux/glossary.md` §3（主要タスク時間の定義と構成要素）
+`skills/analyze/uiux/glossary.md` §3（主要タスク時間の定義と構成要素）
 
 ---
 
@@ -50,7 +50,7 @@ description: 主要タスクの完了時間を構成要素に分解して定義�
 
 ### 4. ボイス側
 
-- 未解消の `pain` / `negative` の件数（`pnpm voices stats`）
+- 未解消の `pain` / `negative` の件数（`node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" stats`）
 - 利用率
 - **空振り率** — 処理は成功したが有効な結果を返せなかった割合。**エラー率とは別物**
 
@@ -82,7 +82,7 @@ description: 主要タスクの完了時間を構成要素に分解して定義�
 ■ 未取得の指標一覧
    - <指標名>（取得するには: <何が必要か>）
 
-■ 記録先: pd/measurements/MP-YYYYMMDD-NN-<slug>.md
+■ 記録先: pd/measurements/{プロダクト}/{年}/MP-YYYYMMDD-NN-<slug>.md
 ```
 
 ## 禁止

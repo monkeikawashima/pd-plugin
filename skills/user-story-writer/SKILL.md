@@ -23,7 +23,7 @@ description: 要望や課題を「〈アクター〉は、〈対象〉を〈で�
 | `pd/specs/02-requirements/user-stories.md` | 既存ストーリーとの突合 |
 | `pd/specs/02-requirements/experience-principles.md` | 紐づける原則 |
 | `pd/specs/03-structure/object-model.md` | 対象に使えるオブジェクト名 |
-| `skills/pd/uiux/templates/user-story.md` | 個票の書式 |
+| `skills/analyze/uiux/templates/user-story.md` | 個票の書式 |
 
 ## 書式（厳守）
 
@@ -36,7 +36,7 @@ description: 要望や課題を「〈アクター〉は、〈対象〉を〈で�
 ### 1. アクターを決める
 
 役割名で書く。**「ユーザー」で済ませない**（誰のことか特定できない要件は検証できない）。
-役割の呼称は `skills/pd/uiux/glossary.md` に従う。
+役割の呼称は `skills/analyze/uiux/glossary.md` に従う。
 
 ### 2. 対象をオブジェクト名にする
 
@@ -73,7 +73,7 @@ description: 要望や課題を「〈アクター〉は、〈対象〉を〈で�
 ### 6. 根拠ボイスを紐づける
 
 ```bash
-pnpm voices query --screen <画面名>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --screen <画面名>
 ```
 
 | 状況 | 書き方 |

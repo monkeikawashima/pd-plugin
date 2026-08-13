@@ -26,8 +26,8 @@ pd/voices/{プロダクト}/{年}/VOICE-<3桁以上の数字>-<slug>.md
 | `product` | `pd/products/<name>.md` の名前 | フォルダ名と一致 |
 | `type` | `pain` / `request` / `negative` / `positive` / `question` | 下表参照。**取り違え厳禁** |
 | `source` | `interview` / `in-app-feedback` / `review` / `support-ticket` / `sales-call` / `meeting` / `user-validation` | 取得経路 |
-| `speaker_role` | `guest` / `store-staff` / `store-owner` / `admin` / `unknown` | 話者の役割 |
-| `speaker_id` | 匿名化ID（例: `G-01` / `S-03`） | **実名・店名・電話番号を書かない** |
+| `speaker_role` | 形式 `^[a-z][a-z0-9-]*$`（例: `end-user` / `operator` / `admin` / `unknown`） | **enum ではない。**下の「役割はプロダクトが決める」を読む |
+| `speaker_id` | 匿名化ID（例: `U-01` / `O-03`） | **実名・組織名・電話番号を書かない** |
 | `captured_at` | `YYYY-MM-DD` | **発言された日**（受領日ではない） |
 | `captured_by` | 記録者 | |
 | `layer` | `戦略` / `要件` / `構造` / `骨格` / `表層` / `未判定` | 判定前は `未判定` |
@@ -45,9 +45,38 @@ pd/voices/{プロダクト}/{年}/VOICE-<3桁以上の数字>-<slug>.md
 | `principles` | 整数配列 | 体験の原則の番号 |
 | `linked_stories` | 文字列配列 | `US-xx` |
 | `linked_uxdr` | 文字列配列 | `UXDR-…` |
-| `tags` | 文字列配列 | ロケールは `locale:en` の形でここに入れる |
+| `tags` | 文字列配列 | 分類軸を増やしたくなったらキーではなくここへ（例: `locale:en`） |
 
 > **上記以外のキーは書けない**（validate がエラーにする）。スキーマを勝手に増やさないため。
+
+---
+
+## 役割（`speaker_role`）はプロダクトが決める
+
+役割の呼び名は業種で変わる。ここで固定すると、特定業種の語彙を全利用者に強制することになる。
+**plugin は形式だけを縛り、値は決めない。**
+
+```
+✅ end-user / operator / manager / admin / unknown
+✅ patient / physician / admin        （医療）
+✅ learner / instructor / admin       （教育）
+✗ Staff        大文字を混ぜない
+✗ 店舗スタッフ   日本語で書かない（query の引数になるため）
+✗ store staff  空白をハイフンに
+```
+
+決めた役割は `pd/voices/taxonomy.json` に列挙する。**列挙した時点で、そこに無い値は弾かれる。**
+
+```json
+{
+  "speaker_role": ["end-user", "operator", "admin", "unknown"],
+  "object": [],
+  "phase": []
+}
+```
+
+列挙しなければ形式チェックだけが働く（導入直後に赤くしないため）。
+ただし**列挙するまで表記ゆれは防げない**。役割が固まった時点で埋めること。
 
 ---
 
@@ -96,7 +125,7 @@ pd/voices/{プロダクト}/{年}/VOICE-<3桁以上の数字>-<slug>.md
 
 - 逐語の書き換え・要約・敬語化
 - 解釈を逐語に混ぜる
-- 実名・店名・電話番号・メールアドレスの記載
+- 実名・組織名・電話番号・メールアドレスの記載
 - 出所（`source`）のない声の追加
 - **検証していないのに `status: 解消`**（実装しただけでは付けない。再検証で再発しないと確認したときだけ）
 
@@ -104,7 +133,6 @@ pd/voices/{プロダクト}/{年}/VOICE-<3桁以上の数字>-<slug>.md
 
 ## 関連
 
-- 記入例: `pd/voices/EXAMPLE.md`
-- 雛形: `pd/voices/_template.md`
-- 語彙: `pd/voices/taxonomy.json`
-- 運用: `.claude/skills/user-voice-ledger/SKILL.md`
+- 雛形: `${CLAUDE_PLUGIN_ROOT}/skills/analyze/uiux/voice-template.md`（`voices.mjs new` がこれを使う）
+- 語彙: `pd/voices/taxonomy.json`（プロジェクト側。`/pd:init` が空で作る）
+- 運用: `${CLAUDE_PLUGIN_ROOT}/skills/user-voice-ledger/SKILL.md`

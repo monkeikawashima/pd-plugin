@@ -1,8 +1,8 @@
 #!/bin/sh
 # 版を上げて配る。3つのコマンドを1つに畳み、順序を間違えられなくする。
 #
-#     sh scripts/release.sh 1.3.0             コミット → タグ → push まで
-#     sh scripts/release.sh 1.3.0 --no-push   手元で止める（確認用）
+#     sh scripts/release.sh 0.4.0             コミット → タグ → push まで
+#     sh scripts/release.sh 0.4.0 --no-push   手元で止める（確認用）
 #
 # 未コミットのままタグを打つと、タグが古い内容を指す。これを3回続けたため、
 # 手順ではなく仕組みで止める。CHANGELOG は**実行前に**手で書いておくこと
@@ -24,7 +24,7 @@ step() { printf '\n▶ %s\n' "$1"; }
 
 case "$VERSION" in
     [0-9]*.[0-9]*.[0-9]*) ;;
-    *) die "使い方: sh scripts/release.sh <版> [--no-push]   例) sh scripts/release.sh 1.3.0" ;;
+    *) die "使い方: sh scripts/release.sh <版> [--no-push]   例) sh scripts/release.sh 0.4.0" ;;
 esac
 
 CURRENT=$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json'))['version'])")
@@ -50,7 +50,7 @@ printf '版 %s → %s\n' "$CURRENT" "$VERSION"
 
 # ------------------------------------------------------------------ 書き換え
 
-step "版を書き換える（plugin.json / marketplace.json / pd-init の ref）"
+step "版を書き換える（plugin.json / marketplace.json / commands/init.md の ref）"
 python3 - "$VERSION" <<'PY'
 import json, pathlib, re, sys
 version = sys.argv[1]
@@ -68,7 +68,7 @@ p.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding="utf-8
 
 # 利用プロジェクトの CI が checkout する版。古いまま配ると、新しく始めた
 # プロジェクトが初期状態から旧版の判定器で CI を回すことになる。
-p = pathlib.Path("commands/pd-init.md")
+p = pathlib.Path("commands/init.md")
 p.write_text(re.sub(r"ref:\s*v[\d.]+", f"ref: v{version}", p.read_text(encoding="utf-8")),
              encoding="utf-8")
 PY

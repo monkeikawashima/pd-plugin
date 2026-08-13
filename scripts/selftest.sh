@@ -20,7 +20,7 @@ cp -R "$ROOT" "$WORK/plugin"
 rm -rf "$WORK/plugin/.git"
 PLUGIN="$WORK/plugin"
 PROJ="$WORK/proj"
-PD="$PROJ/pd"          # 分析データの根。v1.4.0 からプロジェクト直下ではなくここ
+PD="$PROJ/pd"          # 分析データの根。v0.5.0 からプロジェクト直下ではなくここ
 VALIDATE="$PLUGIN/scripts/validate.py"
 
 fail=0
@@ -252,7 +252,7 @@ prune
 
 mkdir -p "$PD/voices/testprod/2026"
 
-# v2.0.0 の書式。1ファイル = 1声。frontmatter 12キー必須。
+# v0.6.0 の書式。1ファイル = 1声。frontmatter 12キー必須。
 voice() {   # $1 = 追加/上書きする frontmatter 行、$2 = 本文
   cat > "$PD/voices/testprod/2026/VOICE-001-slow.md" <<EOF
 ---
@@ -260,8 +260,8 @@ id: VOICE-001
 product: testprod
 type: pain
 source: interview
-speaker_role: guest
-speaker_id: G-01
+speaker_role: end-user
+speaker_id: U-01
 captured_at: 2026-09-01
 captured_by: tester
 layer: 未判定
@@ -287,7 +287,7 @@ voice "" "利用者A-1: 「速い」
 「前のやり方のほうが早い」"
 expect "発話行の形式違反" "発話行は"
 
-voice "screen: guest/top" "利用者A-1: 「速い」"
+voice "screen: home/top" "利用者A-1: 「速い」"
 expect_ok "任意キー screen は通る"
 
 voice "mood: happy" "利用者A-1: 「速い」"
@@ -297,6 +297,31 @@ voice "" "利用者A-1: 「速い」"
 sed -i.bak 's/^type: pain$/type: つらい/' "$PD/voices/testprod/2026/VOICE-001-slow.md"
 rm -f "$PD/voices/testprod/2026/VOICE-001-slow.md.bak"
 expect "type が enum 外" "type が不正"
+
+# v1.0.0: speaker_role は enum をやめた。値は縛らないが、形式は縛る。
+# ここが通ってしまうと「Staff / 店舗スタッフ / store staff」が同居し、query で引けなくなる。
+voice "" "利用者A-1: 「速い」"
+sed -i.bak 's/^speaker_role: end-user$/speaker_role: 店舗スタッフ/' "$PD/voices/testprod/2026/VOICE-001-slow.md"
+rm -f "$PD/voices/testprod/2026/VOICE-001-slow.md.bak"
+expect "speaker_role の形式違反" "speaker_role の形式が不正"
+
+voice "" "利用者A-1: 「速い」"
+sed -i.bak 's/^speaker_role: end-user$/speaker_role: Operator/' "$PD/voices/testprod/2026/VOICE-001-slow.md"
+rm -f "$PD/voices/testprod/2026/VOICE-001-slow.md.bak"
+expect "speaker_role の大文字混入" "speaker_role の形式が不正"
+
+# 役割名はプロジェクトが taxonomy.json で宣言する。宣言した瞬間から縛られる。
+voice "" "利用者A-1: 「速い」"
+expect_ok "taxonomy.json が無ければ形式だけ見る"
+
+printf '{"speaker_role": ["operator", "admin"], "object": [], "phase": []}\n' \
+  > "$PD/voices/taxonomy.json"
+expect "taxonomy.json に無い speaker_role" "speaker_role が taxonomy.json にない"
+
+printf '{"speaker_role": ["end-user", "operator"], "object": [], "phase": []}\n' \
+  > "$PD/voices/taxonomy.json"
+expect_ok "taxonomy.json に載っている speaker_role は通る"
+rm -f "$PD/voices/taxonomy.json"
 
 voice "" "利用者A-1: 「速い」"
 sed -i.bak 's/^id: VOICE-001$/id: VOICE-009/' "$PD/voices/testprod/2026/VOICE-001-slow.md"
@@ -466,9 +491,9 @@ touch "$PROJ/.DS_Store"
 expect "OS のノイズファイル" "OS が作る不要ファイル"
 rm -f "$PROJ/.DS_Store"
 
-printf '\ntestprod のケースでは\n' >> "$PLUGIN/skills/pd/framework/kpi.md"
+printf '\ntestprod のケースでは\n' >> "$PLUGIN/skills/analyze/framework/kpi.md"
 expect "framework への固有名の混入" "プロダクト固有名"
-cp "$ROOT/skills/pd/framework/kpi.md" "$PLUGIN/skills/pd/framework/kpi.md"
+cp "$ROOT/skills/analyze/framework/kpi.md" "$PLUGIN/skills/analyze/framework/kpi.md"
 
 # ---------------------------------------------------------------- 履歴（台帳）
 
@@ -573,9 +598,9 @@ sed_replace "$PLUGIN/hooks/hooks.json" \
 expect_plugin "シェル依存の記述の復活" "Windows で hook が動かない"
 cp "$ROOT/hooks/hooks.json" "$PLUGIN/hooks/hooks.json"
 
-mv "$PLUGIN/commands/pd-init.md" "$WORK/pd-init.md"
-expect_plugin "配布物（コマンド）の欠落" "commands/pd-init.md: 無い"
-mv "$WORK/pd-init.md" "$PLUGIN/commands/pd-init.md"
+mv "$PLUGIN/commands/init.md" "$WORK/pd-init.md"
+expect_plugin "配布物（コマンド）の欠落" "commands/init.md: 無い"
+mv "$WORK/pd-init.md" "$PLUGIN/commands/init.md"
 
 mv "$PLUGIN/.claude-plugin/marketplace.json" "$WORK/marketplace.json"
 expect_plugin "marketplace 定義の欠落" "marketplace.json: 無い"
@@ -589,14 +614,87 @@ mv "$PLUGIN/scripts/release.sh" "$WORK/release.sh"
 expect_plugin "配布手順の削除" "scripts/release.sh: 無い"
 mv "$WORK/release.sh" "$PLUGIN/scripts/release.sh"
 
-# plugin のスキルは必ず名前空間化される。素の /pd-init と書くと利用者が打てない。
-sed_replace "$PLUGIN/README.md" "/pd:pd-init" "/pd-init"
+# plugin のスキルは必ず名前空間化される。素の /init と書くと利用者が打てない。
+sed_replace "$PLUGIN/README.md" "/pd:init" "/init"
 expect_plugin "コマンド名の名前空間の欠落" "コマンド名に名前空間が無い"
+cp "$ROOT/README.md" "$PLUGIN/README.md"
+
+# v1.0.0 で外した旧名（/pd-init）が残っていても拾う
+sed_replace "$PLUGIN/README.md" "/pd:init" "/pd-init"
+expect_plugin "旧コマンド名の残骸" "コマンド名に名前空間が無い"
+cp "$ROOT/README.md" "$PLUGIN/README.md"
+
+# 素の名前が普通の英単語になったため、パスや変数名を誤検知しないことを確かめる。
+# ここが緩いと validate.py / pd/validations/ の言及だけで毎回赤くなり、判定が無視される。
+printf '\n実行は `scripts/validate.py`、記録は pd/validations/ の下。\n' >> "$PLUGIN/README.md"
+if PD_PROJECT_DIR="$PLUGIN" python3 "$VALIDATE" 2>&1 | grep -q "コマンド名に名前空間が無い"; then
+    printf '  ✗ %s — パスへの言及を誤検知した\n' "パスは誤検知しない"; fail=$((fail + 1))
+else
+    printf '  ✓ %s\n' "パスは誤検知しない"; pass=$((pass + 1))
+fi
 cp "$ROOT/README.md" "$PLUGIN/README.md"
 
 mv "$PLUGIN/CHANGELOG.md" "$WORK/CHANGELOG.md"
 expect_plugin "変更履歴の削除" "CHANGELOG.md: 無い"
 mv "$WORK/CHANGELOG.md" "$PLUGIN/CHANGELOG.md"
+
+# v1.0.0: hook 経由では PLUGIN_ROOT がインストール済みの複製を指すため、plugin の
+# ソースを開いていてもパスが一致せず「pd を使うプロジェクト」と誤認されていた。
+# plugin 自身の CI に不要な checkout を要求する違反が毎ターン出る（＝判定が無視される）。
+# 別の場所にある validate.py から plugin のソースを見ても、自己検証になること。
+if PD_PROJECT_DIR="$PLUGIN" python3 "$ROOT/scripts/validate.py" 2>&1 \
+   | grep -q "plugin を取得する手順が無い"; then
+    printf '  ✗ %s — plugin のソースをプロジェクトと誤認した\n' "別パスからでも自己検証になる"
+    fail=$((fail + 1))
+else
+    printf '  ✓ %s\n' "別パスからでも自己検証になる"; pass=$((pass + 1))
+fi
+
+# v1.0.0: 配布物に固有プロダクトの語彙・元プロジェクトの実装パスが混ざっていないか。
+# この判定が無かったため、飲食予約サービスの業務定義が v0.7.0 まで配布物に残った。
+GLOSS="$PLUGIN/skills/analyze/uiux/glossary.md"
+cp "$GLOSS" "$WORK/glossary.md"
+
+printf '\n| 店舗スタッフ | 予約を運用する側 |\n' >> "$GLOSS"
+expect_plugin "配布物への業種語の混入" "業種固有の語がある"
+cp "$WORK/glossary.md" "$GLOSS"
+
+printf '\n- トークン定義: `src/app/globals.css`\n' >> "$GLOSS"
+expect_plugin "配布物への外部パス参照の混入" "外部プロジェクトの参照がある"
+cp "$WORK/glossary.md" "$GLOSS"
+
+printf '\n```bash\npnpm voices query\n```\n' >> "$GLOSS"
+expect_plugin "存在しない npm script の参照" "package.json は無い"
+cp "$WORK/glossary.md" "$GLOSS"
+
+# v1.0.0: 文書が案内する置き場所と、検証器の期待がずれていないか。
+# v0.6.0 の置き場所変更で、UI/UX 側のスキル5本とテンプレ2本が取り残されていた。
+# 案内どおりに書いた UXDR が検証器に落ちる状態で、書いた人には判断材料が無い。
+printf '\n記録先: pd/decisions/UXDR-20260101-01-x.md\n' >> "$GLOSS"
+expect_plugin "案内する置き場所の取り残し" "{プロダクト}/{年} が無い"
+cp "$WORK/glossary.md" "$GLOSS"
+
+printf '\n記録先: pd/reviews/DR-20260101-01-x.md\n' >> "$GLOSS"
+expect_plugin "レビュー結果の置き場所の取り残し" "{プロダクト}/{年} が無い"
+cp "$WORK/glossary.md" "$GLOSS"
+
+# ディレクトリだけを指す言及（pd/decisions/ 配下、のような文）は通す
+printf '\n根拠が崩れた UXDR は `pd/decisions/` にある。\n' >> "$GLOSS"
+if PD_PROJECT_DIR="$PLUGIN" python3 "$VALIDATE" 2>&1 | grep -q "{プロダクト}/{年} が無い"; then
+    printf '  ✗ %s — ディレクトリへの言及まで弾いた\n' "ディレクトリへの言及は通す"; fail=$((fail + 1))
+else
+    printf '  ✓ %s\n' "ディレクトリへの言及は通す"; pass=$((pass + 1))
+fi
+cp "$WORK/glossary.md" "$GLOSS"
+
+# 反例として並べた行まで弾くと、禁止の説明が書けなくなる
+printf '\n✗ 店舗スタッフ   固有の語彙を配布物に書かない\n' >> "$GLOSS"
+if PD_PROJECT_DIR="$PLUGIN" python3 "$VALIDATE" 2>&1 | grep -q "業種固有の語がある"; then
+    printf '  ✗ %s — 反例の行まで弾いた\n' "反例の行は通す"; fail=$((fail + 1))
+else
+    printf '  ✓ %s\n' "反例の行は通す"; pass=$((pass + 1))
+fi
+cp "$WORK/glossary.md" "$GLOSS"
 
 # 版を上げたのに履歴を書き忘れた
 # （版番号を直書きすると、版を上げるたびにこのテストが壊れて消される）
@@ -701,14 +799,25 @@ fi
 cp "$WORK/voices.bak" "$PLUGIN/scripts/voices.mjs"
 
 # 文書側だけ enum を減らす
-cp "$PLUGIN/skills/pd/uiux/voice-schema.md" "$WORK/schema.bak"
-sed 's| / `question` | |' "$WORK/schema.bak" > "$PLUGIN/skills/pd/uiux/voice-schema.md"
+cp "$PLUGIN/skills/analyze/uiux/voice-schema.md" "$WORK/schema.bak"
+sed 's| / `question` | |' "$WORK/schema.bak" > "$PLUGIN/skills/analyze/uiux/voice-schema.md"
 if python3 "$SYNC" >/dev/null 2>&1; then
     printf '  ✗ 文書側の enum 変更を検出できない\n'; fail=$((fail + 1))
 else
     printf '  ✓ 文書側だけ enum を減らすと検出する\n'; pass=$((pass + 1))
 fi
-cp "$WORK/schema.bak" "$PLUGIN/skills/pd/uiux/voice-schema.md"
+cp "$WORK/schema.bak" "$PLUGIN/skills/analyze/uiux/voice-schema.md"
+
+# speaker_role は enum ではなくなったが、形式は3箇所に散る。
+# 文書側から形式が消えると「何を書けば通るのか」が現場から分からなくなる。
+sed 's|`\^\[a-z\]\[a-z0-9-\]\*\$`|（英小文字）|' \
+    "$WORK/schema.bak" > "$PLUGIN/skills/analyze/uiux/voice-schema.md"
+if python3 "$SYNC" 2>&1 | grep -q "speaker_role の形式"; then
+    printf '  ✓ 文書側から speaker_role の形式が消えると検出する\n'; pass=$((pass + 1))
+else
+    printf '  ✗ speaker_role の形式の食い違いを検出できない\n'; fail=$((fail + 1))
+fi
+cp "$WORK/schema.bak" "$PLUGIN/skills/analyze/uiux/voice-schema.md"
 
 # ---------------------------------------------------------------- 誤検知の確認（最重要）
 
@@ -731,7 +840,7 @@ fi
 
 # ------------------------------------------------------- 旧レイアウト（root 直下）
 #
-# v1.4.0 で分析データを `pd/` 配下に畳んだ。既に root 直下で運用している
+# v0.5.0 で分析データを `pd/` 配下に畳んだ。既に root 直下で運用している
 # プロジェクトを壊さないこと。台帳のキーは根からの相対パスなので、
 # **移動しても承認なしで通る**ところまで確かめる（ここが壊れると、更新した
 # 途端に既存プロジェクトが全ファイル「台帳にあるが存在しない」で落ちる）。
