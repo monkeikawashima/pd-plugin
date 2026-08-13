@@ -70,9 +70,16 @@ pd-plugin/                          配布物。Public
 │   │   ├── discovery.md
 │   │   ├── kpi.md
 │   │   └── experiment.md
+│   ├── uiux/                       UI/UX の規律（v2.0.0）
+│   │   ├── rules/                  共通言語・層の規律・決定規則・証拠規則・a11y
+│   │   ├── templates/              画面仕様・ストーリー・UXDR・検証計画
+│   │   ├── voice-schema.md         ボイス台帳のスキーマ（正本）
+│   │   ├── voice-template.md       ボイスの雛形
+│   │   └── glossary.md             用語
 │   └── products/
 │       ├── _template.md
 │       └── other-product.md        記述例
+├── skills/ux-*/ ほか10種            UI/UX スキル（層の判定・台帳・レビュー・a11y …）
 ├── hooks/hooks.json                PostToolUse / Stop / SessionStart（§19）
 ├── commands/
 │   ├── pd-init.md                  プロジェクト側の置き場所・台帳・CI・規約を作る
@@ -80,7 +87,8 @@ pd-plugin/                          配布物。Public
 │   └── pd-uninstall.md             プロジェクト側に作ったものを一覧・削除する
 ├── scripts/
 │   ├── validate.py                 規約の機械検証（唯一の判定者）
-│   └── selftest.sh                 検証器が違反を検出できるかのテスト
+│   ├── selftest.sh                 検証器が違反を検出できるかのテスト
+│   └── voices.mjs                  ボイス台帳 CLI（依存0）
 ├── .github/workflows/validate.yml  配布物の欠落と自己テスト
 ├── pd-skill-blueprint.md           この指示書
 └── README.md                       人間向けの入口
@@ -115,12 +123,21 @@ pd-plugin/                          配布物。Public
     ├── voices/
     │   └── {product-name}/
     │       └── {YYYY}/
-    │           └── YYYYMMDD-{source}.md   Voice（逐語。取得機会ごとに1ファイル）
-    └── simulations/
-        └── {product-name}/
-            └── {YYYY}/
-                └── YYYYMMDD-{slug}.md     予測データ（設計検証用。Evidence ではない）
+    │           └── VOICE-NNN-{slug}.md    Voice（逐語。**1ファイル = 1声**。v2.0.0）
+    ├── simulations/
+    │   └── {product-name}/
+    │       └── {YYYY}/
+    │           └── YYYYMMDD-{slug}.md     予測データ（設計検証用。Evidence ではない）
+    ├── specs/                             層ごとの現在値（上書き。v2.0.0）
+    │   ├── 00-status.md                   各 spec のステータス一覧
+    │   ├── 01-strategy/ … 05-surface/
+    ├── decisions/{product}/{YYYY}/UXDR-YYYYMMDD-NN-{slug}.md   決定記録（追記のみ）
+    ├── validations/{product}/{YYYY}/VP-YYYYMMDD-NN-{slug}.md   検証計画（追記のみ）
+    ├── measurements/{product}/{YYYY}/MP-YYYYMMDD-NN-{slug}.md  計測計画（追記のみ）
+    └── reviews/{product}/{YYYY}/DR-YYYYMMDD-NN-{slug}.md       レビュー結果（追記のみ）
 ```
+
+**UI/UX 専用のディレクトリ（`uiux/` 等）をプロジェクト側に作らない。** pd と並列に置くと、同じ事実を二箇所に書くことになり必ず片方が古くなる。層ごとの現在値は `pd/specs/`、推論の履歴は `pd/analyses/` と、**置き場所で役割を分ける**。
 
 **pd が作るものは `pd/` から出さない。** 例外は `CLAUDE.md` と `.github/workflows/validate.yml` の2つだけで、これらは置き場所が外部に決められている。**やめるときに「どれが pd のものか」を判別できる状態を保つため**（`/pd:pd-uninstall` の対象一覧が成立する条件でもある）。
 
@@ -402,6 +419,9 @@ Unknowns          現時点で不足している情報
 | 台帳のキーを何からの相対パスにするか | **分析データの根（`BASE`）から。** `ROOT` 相対にしない | `ROOT` 相対だと `pd/` へ移した瞬間に全ファイルが「台帳にあるが存在しない」になり、移行のたびに一括承認が必要になる。一括承認は「過去の記録の書き換え検出」そのものを formality にする |
 | アンインストール時のデータ削除を既定にするか | **しない。** 引数なしは一覧表示のみ、`--keep-data` / `--purge` を明示的に選ばせる | 追記のみで積み上げた記録は復元できない。また `CLAUDE.md` / `.gitignore` / CI は pd より前から存在しうるため、ファイルごと消すと pd と無関係な内容が失われる（消すのは pd が足した行・節だけ） |
 | Context 側に Voice の一覧を持たせるか | **持たせない**。ディレクトリが正。Context には「取得済みの範囲 / 得られている論点 / 欠けている声」を書く | ファイル名の列挙は追加のたびに乖離し、しかも `ls` で得られる情報。Context として価値があるのは何が分かっていて誰の声が無いか。Note（履歴）から個別ファイルを出典として引くのは可 — 凍結された記録なので乖離しない |
+| UI/UX の規律を pd に統合するか、別の道具として並べるか | **統合する**（v2.0.0）。プロジェクト側に `uiux/` 等を並置しない | 並置すると同じ事実（KPI のベースライン、判断、顧客の声）を二箇所に書くことになり、必ず片方が古くなる。実際に併用したプロジェクトで、KPI の状態と決定記録が両方に重複した。統合しても衝突しないのは、pd が**推論の流れ**、UI/UX が**抽象度の階層**という直交する軸だから — 置き場所を `analyses/`（履歴）と `specs/`（現在値）で分ければ役割が重ならない |
+| Voice を機会単位でまとめるか、声単位に割るか | **1ファイル = 1声**（v2.0.0 の破壊的変更）。frontmatter に `screen` / `type` / `severity` / `status` を持たせる | 機会単位でまとめると「その画面について誰が何と言ったか」で引けない。UI を直す前に引き当てられない台帳は、無いのと同じ。一方で pd 側の PII 検査と発話行の形式強制（`ID: 「逐語」`）は残す — 匿名化を人の注意力ではなく形式で担保するため。**両者の強い部分だけを採る** |
+| 索引ファイル（`index.md`）を生成するか | **しない**（`voices.mjs index` を廃止）。一覧は `query` / `stats` で取る | 生成物であっても再実行を忘れれば乖離する。既存の「索引を作らない」規約と衝突し、検証器が自分の生成物を弾く状態になっていた |
 
 ---
 
@@ -543,6 +563,16 @@ done
 - [ ] 削除時に、pd より前からある `CLAUDE.md` / `.gitignore` / CI の内容を巻き込まない
 - [ ] 手で編集した場合もコミット前に止まる
 - [ ] 複数人で運用しても、最新の状態と未決事項が1箇所で分かる
+- [ ] plugin をインストールし `/pd:pd-init` を実行するだけで、UI/UX の改善まで回せる（別の道具を足さずに済む）
+- [ ] UI/UX の話が出たとき、層の判定から始まる（好みの応酬にならない）
+- [ ] UI を作る・直す前に、対象画面の Voice を引き当てる手順が組み込まれている
+- [ ] 引き当てずに出した改善案に「デザイナー起案」が明記される
+- [ ] Voice が `screen` で引ける（1ファイル = 1声）
+- [ ] Voice の匿名化が形式で担保される（PII 検査と発話行の形式強制が新スキーマでも働く）
+- [ ] UXDR が「決めなかったこと」を3列（何が分かれば決まるか / いつまでに / 誰が）で持つ
+- [ ] 作業仮説に観測可能な閾値を持つ棄却条件がある
+- [ ] 影響範囲に「変わらなかったもの」が書かれる
+- [ ] プロジェクト側に UI/UX 専用の並列ディレクトリ（`uiux/` 等）を作らせない
 - [ ] Solution Jumping を防止している
 - [ ] 必要な Framework のみ利用する設計になっている
 - [ ] ファイル間で不要な重複がない
