@@ -730,6 +730,8 @@ Skill を複数プロジェクトで使うなら、配布物を plugin にする
 /pd-init                                  利用プロジェクトで1回だけ
 ```
 
+ただし `/plugin update` は**自動では走らない**。次項の「版を配る」を参照。
+
 このとき次の4点が要る。**どれか1つでも欠けると、install しても動かないか、無関係なプロジェクトを壊す。**
 
 1. **hook の no-op 条件** — plugin の hook は有効化した全プロジェクトで動く。pd を使わないプロジェクトで検証器が走ると毎回違反を出すため、目印（`pd/ledger.json`）が無ければ即 `exit 0` する
@@ -737,7 +739,23 @@ Skill を複数プロジェクトで使うなら、配布物を plugin にする
 3. **Context の置き場所** — `products/{product-name}.md` は利用者が書き換えるものなので、plugin 配下に置かない（更新で消える）
 4. **CI からの取得** — runner に plugin は入っていない。利用プロジェクトの CI では plugin リポジトリを checkout する。**このため plugin 側は Public にする**（Private だとトークンが要る）
 
-検証器の guard は、plugin 自身を見ているのか利用プロジェクトを見ているのかで分岐する。前者では配布物の欠落（`plugin.json` / `marketplace.json` / `hooks.json` / コマンド）を、後者では台帳と CI を見る。
+検証器の guard は、plugin 自身を見ているのか利用プロジェクトを見ているのかで分岐する。前者では配布物の欠落（`plugin.json` / `marketplace.json` / `hooks.json` / コマンド / `CHANGELOG.md`）と版の整合を、後者では台帳と CI を見る。
+
+### 版を配る
+
+**Claude Code は `plugin.json` の `version` を更新の判定キーにする。** 上げなければ、コミットを push しても `/plugin update` は「already at the latest version」を返し、利用者に届かない。逆に `version` を省けば commit SHA が版になり、push のたびに届く（開発中のチーム内配布向け）。**判定器を含む plugin では明示版を使う** — 意図しないタイミングで判定が変わると、利用者の CI が理由なく落ちる。
+
+さらに、**サードパーティの marketplace は auto-update が既定で無効**。利用者が `/plugin` → Marketplaces → Enable auto-update を自分で有効にしない限り、版を上げても手元は古いままになる。**README の導入手順に「更新の受け取り方を決める」段を置く。** 置かないと、利用者は更新の存在自体を知らないまま使い続ける。
+
+このため配布側は次の3つを同じ作業内で行う。**検証器で強制する。**
+
+```
+plugin.json と marketplace.json の version を上げる   ← 食い違いを検出する
+CHANGELOG.md に該当版の項目を書く                     ← 現在の版が無ければ落とす
+git tag v{version} を push する                       ← 利用プロジェクトの CI が参照する
+```
+
+`CHANGELOG.md` は体裁の問題ではない。**判定を変える plugin では、更新が既存データを落としうる。** 何が変わったかを書かなければ、利用者は更新の可否を判断できず、結果として誰も更新しなくなる。存在チェックだけでは版ごとの追記が抜けるため、`plugin.json` の現在の版が本文に現れるかまで見る。
 
 **このリポジトリでは `.gitignore` と CI（`.github/workflows/validate.yml`）だけを採用している。** git hook 系（`pre-commit` / `pre-push` / `commit-gate.sh` / `ensure-hooks.sh`）は入れていない。PostToolUse hook が編集の時点で止めているため、同じ判定を段数だけ増やしても検出は増えず、`--no-verify` の抜け道を塞ぐ仕組みの維持コストだけが残るため。
 

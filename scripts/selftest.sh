@@ -428,6 +428,22 @@ mv "$PLUGIN/scripts/selftest.sh" "$WORK/selftest.sh"
 expect_plugin "selftest.sh の削除" "検証の仕組みが不完全"
 mv "$WORK/selftest.sh" "$PLUGIN/scripts/selftest.sh"
 
+mv "$PLUGIN/CHANGELOG.md" "$WORK/CHANGELOG.md"
+expect_plugin "変更履歴の削除" "CHANGELOG.md: 無い"
+mv "$WORK/CHANGELOG.md" "$PLUGIN/CHANGELOG.md"
+
+# 版を上げたのに履歴を書き忘れた
+sed_replace "$PLUGIN/.claude-plugin/plugin.json" \
+            '"version": "1.1.0"' '"version": "9.9.9"'
+sed_replace "$PLUGIN/.claude-plugin/marketplace.json" \
+            '"version": "1.1.0"' '"version": "9.9.9"'
+expect_plugin "版を上げて履歴を書き忘れる" "9.9.9 の項目が無い"
+cp "$ROOT/.claude-plugin/marketplace.json" "$PLUGIN/.claude-plugin/marketplace.json"
+
+# plugin.json だけ上げ忘れた（marketplace.json 側だけ上げても更新は届かない）
+expect_plugin "版の記載の食い違い" "version が plugin.json と違う"
+cp "$ROOT/.claude-plugin/plugin.json" "$PLUGIN/.claude-plugin/plugin.json"
+
 # ---------------------------------------------------------------- 誤検知の確認（最重要）
 
 prune

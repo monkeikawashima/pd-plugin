@@ -499,6 +499,7 @@ PLUGIN_FILES = [
     "skills/pd/SKILL.md",
     "skills/pd/products/_template.md",
     ".github/workflows/validate.yml",
+    "CHANGELOG.md",
 ]
 
 
@@ -507,6 +508,8 @@ def check_plugin_guards() -> None:
     for name in PLUGIN_FILES:
         if not (PLUGIN_ROOT / name).exists():
             errors.append(f"{name}: 無い（検証の仕組みが不完全）")
+
+    check_version_consistency()
 
     hooks_file = PLUGIN_ROOT / "hooks/hooks.json"
     if hooks_file.exists():
@@ -529,6 +532,44 @@ def check_plugin_guards() -> None:
             if "pd/ledger.json" not in body:
                 err(hooks_file, f"{event} の hook に pd プロジェクトの判定が無い"
                                 "（pd を使わないプロジェクトでも動いてしまう）")
+
+
+def check_version_consistency() -> None:
+    """版の記載が3箇所で食い違っていないか。
+
+    Claude Code は plugin.json の version を更新の判定キーにする。上げ忘れると
+    利用者に更新が届かず、marketplace.json だけ上げても効かない。
+    履歴が無ければ、利用者は更新して何が変わるのかを判断できない。
+    """
+    manifest = PLUGIN_ROOT / ".claude-plugin/plugin.json"
+    market = PLUGIN_ROOT / ".claude-plugin/marketplace.json"
+    changelog = PLUGIN_ROOT / "CHANGELOG.md"
+    if not manifest.exists():
+        return
+
+    try:
+        version = json.loads(manifest.read_text(encoding="utf-8")).get("version")
+    except json.JSONDecodeError as e:
+        err(manifest, f"JSON として壊れている: {e}")
+        return
+    if not version:
+        err(manifest, "version が無い（利用者に更新が届かない）")
+        return
+
+    if market.exists():
+        try:
+            entries = json.loads(market.read_text(encoding="utf-8")).get("plugins", [])
+        except json.JSONDecodeError as e:
+            err(market, f"JSON として壊れている: {e}")
+            entries = []
+        for entry in entries:
+            if entry.get("name") == "pd" and entry.get("version") != version:
+                err(market, f"version が plugin.json と違う "
+                            f"（{entry.get('version')} ≠ {version}）")
+
+    if changelog.exists() and version not in changelog.read_text(encoding="utf-8"):
+        err(changelog, f"{version} の項目が無い"
+                       "（利用者が更新の内容を判断できない）")
 
 
 def check_project_guards() -> None:
