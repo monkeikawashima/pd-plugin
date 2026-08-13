@@ -49,7 +49,10 @@ SELF_CHECK = ROOT == PLUGIN_ROOT
 
 
 # 分析データの置き場所（プロジェクト側）
-DATA_DIRS = ("products", "analyses", "voices", "simulations")
+# v2.0.0 で UI/UX の成果物（specs / decisions / validations / measurements / reviews）を
+# ここに統合した。UI/UX 専用の別ディレクトリを作らない（二重管理になるため）。
+DATA_DIRS = ("products", "analyses", "voices", "simulations",
+             "specs", "decisions", "validations", "measurements", "reviews")
 
 
 def _base_dir() -> Path:
@@ -123,7 +126,11 @@ SURNAMES = """佐藤 鈴木 高橋 田中 伊藤 渡辺 山本 中村 小林 加
 LEDGER = ROOT / "pd/ledger.json"
 LEDGER_LOG = ROOT / "pd/ledger-log.md"
 ACCEPT_HINT = "/pd:pd-validate --accept で承認する"
-IMMUTABLE_DIRS = ("analyses", "voices", "simulations")
+# 追記のみ（過去の記録を書き換えない）。specs は現在値なので含めない。
+# decisions / validations / measurements / reviews は「そのとき何を決めたか」の
+# 記録であり、後から書き換えると判断の経緯が消えるため追記のみに含める。
+IMMUTABLE_DIRS = ("analyses", "voices", "simulations",
+                  "decisions", "validations", "measurements", "reviews")
 
 # 新しい規約（反証 / 予測値 / 棄却条件の閾値）の適用開始日
 RULES_FROM = "2026-08-12"
@@ -312,14 +319,24 @@ def frontmatter(text: str) -> dict[str, str]:
 
 PATTERNS = {
     "analyses": re.compile(r"^analyses/([a-z0-9-]+)/(\d{4})/(\d{8})-(\d{2})-([a-z][a-z0-9]*)\.md$"),
-    "voices": re.compile(r"^voices/([a-z0-9-]+)/(\d{4})/(\d{8})-([a-z][a-z0-9]*)\.md$"),
+    # v2.0.0: 1ファイル = 1声。ID で引き当てるため VOICE-NNN を名前に持つ。
+    # 年フォルダは captured_at（発言された日）の年。
+    "voices": re.compile(r"^voices/([a-z0-9-]+)/(\d{4})/VOICE-(\d{3,})-([a-z][a-z0-9-]*)\.md$"),
     "simulations": re.compile(r"^simulations/([a-z0-9-]+)/(\d{4})/(\d{8})-([a-z][a-z0-9]*)\.md$"),
+    "decisions": re.compile(r"^decisions/([a-z0-9-]+)/(\d{4})/UXDR-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
+    "validations": re.compile(r"^validations/([a-z0-9-]+)/(\d{4})/VP-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
+    "measurements": re.compile(r"^measurements/([a-z0-9-]+)/(\d{4})/MP-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
+    "reviews": re.compile(r"^reviews/([a-z0-9-]+)/(\d{4})/DR-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
 }
 
 EXPECTED = {
     "analyses": "analyses/{プロダクト}/{年}/YYYYMMDD-NN-{主題1語}.md",
-    "voices": "voices/{プロダクト}/{年}/YYYYMMDD-{取得経路1語}.md",
+    "voices": "voices/{プロダクト}/{年}/VOICE-NNN-{主題1語}.md",
     "simulations": "simulations/{プロダクト}/{年}/YYYYMMDD-{主題1語}.md",
+    "decisions": "decisions/{プロダクト}/{年}/UXDR-YYYYMMDD-NN-{主題1語}.md",
+    "validations": "validations/{プロダクト}/{年}/VP-YYYYMMDD-NN-{主題1語}.md",
+    "measurements": "measurements/{プロダクト}/{年}/MP-YYYYMMDD-NN-{主題1語}.md",
+    "reviews": "reviews/{プロダクト}/{年}/DR-YYYYMMDD-NN-{主題1語}.md",
 }
 
 
@@ -329,12 +346,14 @@ def check_path(path: Path, kind: str) -> tuple[str, str, str] | None:
     if not m:
         err(path, f"命名規則に合わない。期待: {BASE_REL}{EXPECTED[kind]}")
         return None
-    product, year, date = m.group(1), m.group(2), m.group(3)
+    product, year, third = m.group(1), m.group(2), m.group(3)
     if product not in known_products():
         err(path, f"{BASE_REL}{PRODUCTS_REL}/{product}.md が存在しない（Context のないプロダクト）")
-    if not date.startswith(year):
-        err(path, f"年フォルダ {year} とファイル名の日付 {date} が一致しない")
-    return product, year, date
+    # voices の3番目は ID の数字。日付ではないので突き合わせは check_voice が
+    # frontmatter の captured_at に対して行う。
+    if kind != "voices" and not third.startswith(year):
+        err(path, f"年フォルダ {year} とファイル名の日付 {third} が一致しない")
+    return product, year, third
 
 
 # ------------------------------------------------------------------ 各種検証
@@ -464,10 +483,25 @@ def check_sections(path: Path, text: str) -> None:
                     err(path, f"「{name}」に {label} が無い")
 
 
-VOICE_KEYS = ["product", "date", "source", "context"]
-VOICE_SOURCES = {"interview", "sales", "support", "onboarding", "observation"}
+# v2.0.0: 1ファイル = 1声。UI を直す前に screen で引き当てられるようにするため、
+# 分類キーを frontmatter に持たせる。書式の正本は skills/pd/uiux/voice-schema.md。
+# **この2つは必ず一致させること**（人は文書を見て書き、ここが弾く、という事故を避ける）。
+VOICE_KEYS = ["id", "product", "type", "source", "speaker_role", "speaker_id",
+              "captured_at", "captured_by", "layer", "severity", "frequency", "status"]
+VOICE_OPTIONAL = {"object", "phase", "screen", "principles",
+                  "linked_stories", "linked_uxdr", "tags", "context"}
+VOICE_ENUMS = {
+    "type": {"pain", "request", "negative", "positive", "question"},
+    "source": {"interview", "in-app-feedback", "review", "support-ticket",
+               "sales-call", "meeting", "user-validation"},
+    "speaker_role": {"guest", "store-staff", "store-owner", "admin", "unknown"},
+    "layer": {"戦略", "要件", "構造", "骨格", "表層", "未判定"},
+    "severity": {"high", "medium", "low"},
+    "status": {"未検証", "検証済み", "対応中", "解消", "却下"},
+}
 SPEAKER_ID = re.compile(r"[^\s（(]+[A-Z]-\d+")
 QUOTE_FORM = re.compile(r"^[^\s:：]*[A-Za-z]-\d+[^:：]*[:：]")
+VOICE_ID = re.compile(r"^VOICE-(\d{3,})$")
 
 
 def check_voice(path: Path) -> None:
@@ -477,18 +511,37 @@ def check_voice(path: Path) -> None:
 
     for key in VOICE_KEYS:
         if key not in fm:
-            err(path, f"frontmatter に {key} が無い（product / date / source / context）")
-    if got and fm.get("product") and fm["product"] != got[0]:
-        err(path, f"frontmatter の product（{fm['product']}）がフォルダ（{got[0]}）と違う")
+            err(path, f"frontmatter に {key} が無い")
+    for key in fm:
+        if key not in VOICE_KEYS and key not in VOICE_OPTIONAL:
+            err(path, f"未知の frontmatter キー「{key}」。"
+                      f"スキーマを勝手に増やさない（正本: skills/pd/uiux/voice-schema.md）")
 
-    src = str(path.stem).split("-", 1)[-1]
-    if src not in VOICE_SOURCES:
-        err(path, f"取得経路「{src}」は許可されていない。"
-                  f"次のいずれかを使う: {' / '.join(sorted(VOICE_SOURCES))}")
-    if fm.get("source") and fm["source"] != src:
-        err(path, f"frontmatter の source（{fm['source']}）がファイル名（{src}）と違う")
+    for key, allowed in VOICE_ENUMS.items():
+        val = fm.get(key)
+        if val and val not in allowed:
+            err(path, f"{key} が不正: 「{val}」（許容: {' / '.join(sorted(allowed))}）")
 
-    if not SPEAKER_ID.search(text):
+    if got:
+        product, year, num = got
+        if fm.get("product") and fm["product"] != product:
+            err(path, f"frontmatter の product（{fm['product']}）がフォルダ（{product}）と違う")
+        m = VOICE_ID.match(fm.get("id", ""))
+        if not m:
+            err(path, f"id が VOICE-NNN の形式でない: 「{fm.get('id', '')}」")
+        elif m.group(1) != num:
+            err(path, f"id（{fm['id']}）がファイル名の番号（{num}）と違う")
+        cap = fm.get("captured_at", "")
+        if cap and not cap.startswith(year):
+            err(path, f"年フォルダ {year} と captured_at {cap} が一致しない")
+
+    freq = fm.get("frequency", "")
+    if freq and (not freq.isdigit() or int(freq) < 1):
+        err(path, f"frequency は 1 以上の整数: 「{freq}」")
+
+    # frontmatter の speaker_id を数えないよう、本文だけを見る
+    body = text.split("---", 2)[2] if text.startswith("---") and text.count("---") >= 2 else text
+    if not SPEAKER_ID.search(body):
         err(path, "発話者が ID 形式で書かれていない（例: 利用者A-1 / 店舗B-2）")
 
     for i, line in enumerate(text.split("\n"), 1):
@@ -507,6 +560,95 @@ def check_voice(path: Path) -> None:
                 if name in line:
                     err(path, f"実名らしい語「{name}」が含まれている。役割と ID で書く", i)
                     break
+
+
+# ------------------------------------------------------- UI/UX の成果物（v2.0.0）
+
+UXDR_KEYS = ["product", "date", "layer", "kind", "status"]
+UXDR_KINDS = {"決定", "未決定", "作業仮説", "棄却"}
+LAYERS = {"戦略", "要件", "構造", "骨格", "表層"}
+
+
+def check_uxdr(path: Path) -> None:
+    """決定記録。決めなかったことと、作業仮説の棄却条件を必須にする。"""
+    got = check_path(path, "decisions")
+    text = path.read_text(encoding="utf-8")
+    fm = frontmatter(text)
+
+    for key in UXDR_KEYS:
+        if key not in fm:
+            err(path, f"frontmatter に {key} が無い")
+    if got and fm.get("product") and fm["product"] != got[0]:
+        err(path, f"frontmatter の product（{fm['product']}）がフォルダ（{got[0]}）と違う")
+    if fm.get("layer") and fm["layer"] not in LAYERS:
+        err(path, f"layer が不正: 「{fm['layer']}」（許容: {' / '.join(sorted(LAYERS))}）")
+    if fm.get("kind") and fm["kind"] not in UXDR_KINDS:
+        err(path, f"kind が不正: 「{fm['kind']}」（許容: {' / '.join(sorted(UXDR_KINDS))}）")
+
+    secs = sections(text)
+    if not any("決めなかった" in k for k in secs):
+        err(path, "「決めなかったこと」の節が無い（決めたことだけ書いて終わらない）")
+    else:
+        body = next(v for k, v in secs.items() if "決めなかった" in k)
+        if "無し" not in body and "なし" not in body:
+            for label in ("何が分かれば", "いつまでに", "誰が"):
+                if label not in body:
+                    err(path, f"「決めなかったこと」に「{label}」の列が無い"
+                              f"（3列すべて埋まらない未決定は、未決定ですらない）")
+
+    if fm.get("kind") == "作業仮説":
+        named = [v for k, v in secs.items() if "棄却条件" in k]
+        inline = [l for l in text.split("\n")
+                  if "棄却条件" in l and not l.strip().startswith("#")
+                  and not TABLE_SEPARATOR.match(l)]
+        if not named and not inline:
+            err(path, "kind が 作業仮説 だが棄却条件が無い（棄却条件のない仮説は記録しても意味がない）")
+        # 節にまとめて書く形と、表の行に書く形の両方を許す。
+        # どちらも「いつ棄却するか」を観測可能な量で示していなければ意味がない。
+        for chunk in named + inline:
+            if not HEDGE_FREE.search(chunk):
+                err(path, "棄却条件に観測可能な閾値が無い（数値・比較で書く。暫定なら明示する）")
+
+    if not any("根拠" in k for k in secs):
+        err(path, "「根拠」の節が無い（一次情報 / 上位層 / 計測値。無いなら「なし」「未取得」と書く）")
+    if not any("影響範囲" in k for k in secs):
+        err(path, "「影響範囲」の節が無い（変わらなかったものも書く）")
+    else:
+        body = next(v for k, v in secs.items() if "影響範囲" in k)
+        if "変わらなかった" not in body:
+            err(path, "「影響範囲」に「変わらなかったもの」が無い"
+                      "（次の人が同じ確認を繰り返す）")
+
+
+def check_measurement(path: Path) -> None:
+    """計測計画。時間側だけの報告を防ぎ、未取得を明示させる。"""
+    check_path(path, "measurements")
+    text = path.read_text(encoding="utf-8")
+    if "未取得" not in text and not re.search(r"[0-9０-９]", text):
+        err(path, "指標に値も「未取得」も無い（それらしい数字を置かず、未取得と書く）")
+    if "品質" not in text:
+        err(path, "品質側の軸が無い（時間側だけの改善報告をしない）")
+
+
+def check_validation(path: Path) -> None:
+    """検証計画。棄却しうる形になっているかだけを見る。"""
+    check_path(path, "validations")
+    text = path.read_text(encoding="utf-8")
+    if "棄却" not in text:
+        err(path, "棄却条件が無い（棄却しうる形でない仮説は検証できない）")
+    if "観察" not in text and "行動" not in text:
+        err(path, "行動観察の設計が無い（意見聴取だけで仮説を採否しない）")
+
+
+def check_review(path: Path) -> None:
+    """レビュー結果。見れば分かる課題と、検証しないと決まらない仮説を分ける。"""
+    check_path(path, "reviews")
+    text = path.read_text(encoding="utf-8")
+    secs = sections(text)
+    if not any("課題" in k for k in secs) or not any("仮説" in k for k in secs):
+        err(path, "「見れば分かる課題」と「検証しないと決まらない仮説」に分かれていない")
+    if "デザイナー起案" not in text and "VOICE-" not in text:
+        err(path, "根拠のボイス（VOICE-…）が無い指摘に「デザイナー起案」の明記が無い")
 
 
 def check_simulation(path: Path) -> None:
@@ -782,6 +924,14 @@ def validate(paths: list[Path]) -> None:
             check_voice(path)
         elif rel.startswith("simulations/") and path.suffix == ".md":
             check_simulation(path)
+        elif rel.startswith("decisions/") and path.suffix == ".md":
+            check_uxdr(path)
+        elif rel.startswith("measurements/") and path.suffix == ".md":
+            check_measurement(path)
+        elif rel.startswith("validations/") and path.suffix == ".md":
+            check_validation(path)
+        elif rel.startswith("reviews/") and path.suffix == ".md":
+            check_review(path)
         elif rel.startswith(f"{PRODUCTS_REL}/") and path.stem not in {"_template"}:
             check_product(path)
 
@@ -798,7 +948,8 @@ def main() -> int:
                      accept, full=False)
     else:
         targets = []
-        dirs = ["analyses", "voices", "simulations", PRODUCTS_REL]
+        dirs = ["analyses", "voices", "simulations", "specs", "decisions",
+                "validations", "measurements", "reviews", PRODUCTS_REL]
         for d in dirs:
             targets += sorted((BASE / d).rglob("*.md")) if (BASE / d).exists() else []
         validate(targets)

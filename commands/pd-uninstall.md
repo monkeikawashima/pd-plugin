@@ -30,7 +30,7 @@ description: pd がこのプロジェクトに作ったものを一覧表示し�
 
 **分析結果**（`--purge` でのみ消す）
 
-- `pd/products/` `pd/analyses/` `pd/voices/` `pd/simulations/`
+- `pd/products/` `pd/analyses/` `pd/voices/` `pd/simulations/` `pd/specs/` `pd/decisions/` `pd/validations/` `pd/measurements/` `pd/reviews/`
 - 旧レイアウト（root 直下に置いている場合）は同名の root 直下ディレクトリ
 
 ## 手順

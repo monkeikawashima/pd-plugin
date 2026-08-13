@@ -143,6 +143,70 @@ Note が1件も無い場合、この Step は不要。既存 Note を全件読�
 - `framework/kpi.md` — KPI Tree、KPI Driver Analysis、Leading / Lagging、Segment 分析、変化が観測されないときの読み方、成果指標に載らない価値
 - `framework/experiment.md` — Hypothesis の検証設計、Experiment、Decision、期限のある判断
 
+## UI/UX の作業（v2.0.0 で統合）
+
+**UI・UX の話が出たら、この Skill ではなく専用スキルから始める。**この Skill は推論の流れ
+（問題 → 原因 → 仮説 → 検証 → 決定）を担当し、UI/UX スキルは**抽象度の階層**
+（戦略 → 要件 → 構造 → 骨格 → 表層）を担当する。**2つは直交する。**
+
+同じ事実を両方に書かない。層ごとの現在値は `pd/specs/`、推論の履歴は `pd/analyses/` に置く。
+
+| # | 場面 | スキル |
+|---|---|---|
+| 0 | UI/UX の話が出たら**最初に** | `ux-layer-triage`（層の判定） |
+| 1 | 利用者の生の声を受け取った | `user-voice-ledger`（**要約せず逐語のまま**） |
+| 2 | UI を作る／直す**前** | `user-voice-ledger`（対象画面のボイスを引き当て） |
+| 3 | 要望を要件にする | `user-story-writer` |
+| 4 | 置き場所・対象物の話 | `object-model-reviewer` |
+| 5 | 色・コントラストに触る | `a11y-contrast-guard`（**目分量で置かない**） |
+| 6 | 実装後・PR 前 | `ux-design-review` |
+| 7 | 決められない論点が残った | `ux-validation-planner` |
+| 8 | 数値で示す | `ux-measurement` |
+| 9 | 決めた／決められなかった | `ux-decision-record` |
+| 10 | 上流の前提が変わった | `ux-update-cascade` |
+
+規律の実体は `skills/pd/uiux/` にある。
+
+- `uiux/rules/` — 共通言語 / 層の規律 / 決定規則 / 証拠規則 / アクセシビリティ
+- `uiux/templates/` — 画面仕様 / ユーザーストーリー / UXDR / 検証計画
+- `uiux/voice-schema.md` — ボイス台帳のスキーマ（**正本**）
+- `uiux/glossary.md` — 用語
+
+### 成果物の置き場所
+
+| 種類 | 置き場所 | 命名 |
+|---|---|---|
+| 層ごとの現在値 | `pd/specs/` | `{層番号}-{層名}/{artifact}.md`（**上書き**） |
+| 決定記録（UXDR） | `pd/decisions/{product}/{年}/` | `UXDR-YYYYMMDD-NN-<slug>.md` |
+| 検証計画 | `pd/validations/{product}/{年}/` | `VP-YYYYMMDD-NN-<slug>.md` |
+| 計測計画 | `pd/measurements/{product}/{年}/` | `MP-YYYYMMDD-NN-<slug>.md` |
+| レビュー結果 | `pd/reviews/{product}/{年}/` | `DR-YYYYMMDD-NN-<slug>.md` |
+
+`specs/` だけが上書き（現在値）。**残り4つは追記のみ。**そのとき何を決めたかを
+後から書き換えると、判断の経緯が消えるため。
+
+### 止まってよいのは次の6つだけ
+
+それ以外で止まったら理由を書く。
+
+| 止まる場所 | 理由 |
+|---|---|
+| spec のステータス昇格・差し戻し | 人間の合意事項 |
+| 構造層（オブジェクト）の確定 | 開発チームの同席が必須 |
+| 色の最終決定 | デザイナーの領域（下限の存在証明までは出す） |
+| 検証の人数・時期・実施者 | 段取りは人間が決める |
+| 逐語のない声の severity | 一次情報不足（一段下げて明記する） |
+| 一意に決まらない骨格の選択 | 案を等価に置き計測項目を示すまで |
+
+### 守ること
+
+1. 台帳に無い改善案は「**デザイナー起案**」と明記する（「顧客要望」と書かない）
+2. `未合意` / `未定義` ステータスの spec を実装の根拠にしない
+3. 一次情報に無い記述には `[推測]` を付ける。**数値を創作しない**（未取得なら「未取得」）
+4. `request`（相手が出した手段）を `pain`（困っている事実）として扱わない
+5. 状態設計に「**空振り**（処理は成功したが有効な結果が無い）」を必ず含める
+6. 「無い」と書くときは調査範囲を添える
+
 ## Evidence の扱い
 
 すべての記述に、次のいずれかのラベルを与える。混ぜない。
@@ -298,23 +362,48 @@ Context に変化があった場合は `products/{product-name}.md` を更新す
 インタビュー・商談・サポート等で得た発話は、分析結果とは別に保存する。
 
 ```
-pd/voices/{product-name}/{YYYY}/YYYYMMDD-{source}.md
+pd/voices/{product-name}/{YYYY}/VOICE-NNN-{slug}.md
 ```
 
-- `{source}` は取得経路を1語で（`interview` / `sales` / `support` / `onboarding` / `observation` など）
-- `{YYYY}` は年フォルダ。`analyses/` と同じ規則
-- 1ファイルに同一機会の発話をまとめる。**逐語で記録し、要約に置き換えない**
+**1ファイル = 1声。**面談1回で3つの論点が出たら3ファイルになる。まとめない。
 
-frontmatter（4項目。省略しない）:
+理由は引き当てのため。UI を直すときに必要なのは「その画面について誰が何と言ったか」であり、
+機会単位でまとめると `screen` で引けなくなる。**引けない台帳は無いのと同じ。**
+年フォルダは `captured_at`（発言された日）の年。
+
+frontmatter は12個の必須キーを持つ（正本: `skills/pd/uiux/voice-schema.md`）。
 
 ```
 ---
-product:  {product-name}
-date:     YYYY-MM-DD
-source:   interview / sales / support / onboarding / observation
-context:  どの場面での発話か
+id: VOICE-001
+product: {product-name}
+type: pain | request | negative | positive | question
+source: interview | in-app-feedback | review | support-ticket | sales-call | meeting | user-validation
+speaker_role: guest | store-staff | store-owner | admin | unknown
+speaker_id: G-01          # 匿名化ID。実名・店名・連絡先を書かない
+captured_at: YYYY-MM-DD   # 発言された日（受領日ではない）
+captured_by: 記録者
+layer: 戦略 | 要件 | 構造 | 骨格 | 表層 | 未判定
+severity: high | medium | low
+frequency: 1              # 同一趣旨の声は統合してここを増やす
+status: 未検証 | 検証済み | 対応中 | 解消 | 却下
 ---
 ```
+
+任意キー: `screen`（**引き当てキー**）/ `object` / `phase` / `principles` / `linked_stories` / `linked_uxdr` / `tags` / `context`。
+**これ以外のキーは書けない**（検証器が弾く。スキーマを勝手に増やさないため）。
+
+`type` の取り違えを最も強く戒める。
+
+| type | 定義 |
+|---|---|
+| `pain` | できていない、困っている**事実** |
+| `request` | 話者が出した**解決手段の提案** |
+| `negative` | 否定的な**評価・感情** |
+| `positive` | 効いている点。**消さないために記録する** |
+| `question` | 使い方が分からない＝**理解の失敗** |
+
+> ⚠️ **`request` を `pain` として記録しない。**手段を課題として扱うと、その手段以外の解が消える。
 
 発話行の形式（省略しない）:
 
@@ -324,8 +413,23 @@ context:  どの場面での発話か
 
 - 発話者は **`役割 + 英大文字 + ハイフン + 数字`** の ID（`利用者A-1` / `店舗B-2`）
 - **発話を含む行は必ず ID から始める。** 実名が入り込む余地を形式で消す
+- 逐語が取れなかった場合は「逐語なし」と書き、`severity` を**一段下げる**
 - 各件に文脈とどう聞いたかを添える（書式は `framework/discovery.md` の Voice を参照）
-- 分析で Voice を引用する場合、Note 側には引用と出典ファイル名を書き、逐語の全文は `voices/` に残す
+- 分析で Voice を引用する場合、Note 側には引用と ID を書き、逐語の全文は `voices/` に残す
+
+### CLI
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" new --product <p> --type <t> … --slug <s>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --screen <画面名>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" validate
+node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" stats
+```
+
+**UI を作る・直す前に必ず `query --screen` を実行する。**0件は「問題が無い」ではなく
+「記録されていない」。0件のまま出す改善案には **「デザイナー起案」と明記する**。
+
+索引ファイルは作らない。一覧は `query` / `stats` で取る（索引は更新漏れで実態と乖離する）。
 
 `voices/` は plugin 配下に置かない。Skill が過去の発話を毎回読み込むことになり、更新時に消える。
 

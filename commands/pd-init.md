@@ -20,9 +20,16 @@ pd/
 ├── analyses/       分析の履歴（追記のみ）
 ├── voices/         発話の逐語（匿名化済み・追記のみ）
 ├── simulations/    予測データ（Evidence ではない）
+├── specs/          層ごとの現在値（戦略〜表層。上書き）
+├── decisions/      決定記録 UXDR（追記のみ）
+├── validations/    検証計画 VP（追記のみ）
+├── measurements/   計測計画 MP（追記のみ）
+├── reviews/        レビュー結果 DR（追記のみ）
 ├── .local/         元データの一時置き場（共有しない）
 └── ledger.json     台帳（過去の記録の書き換えを検出する）
 ```
+
+`specs/` 以降は v2.0.0 で UI/UX の成果物を統合したもの。**UI/UX 専用の別ディレクトリを作らない**（`uiux/` のような並列の置き場所を作ると、同じ事実を二箇所に書くことになる）。
 
 空ディレクトリは残らないので、`pd/.local/README.md` に「ここに置いた元データは共有しない。作業後に消す」旨を書いて作る。他は最初のファイルが書かれた時点でできるため、**先に空フォルダを作らない**。
 
@@ -57,7 +64,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: monkeikawashima/pd-plugin
-          ref: v1.4.0
+          ref: v2.0.0
           path: .pd-plugin
       - name: 規約を検証する
         run: python3 .pd-plugin/scripts/validate.py
@@ -69,10 +76,12 @@ jobs:
 
 - 判定者は1つ。`/pd:pd-validate` が唯一の判定者で、人の解釈で合否を決めない
 - pd が作るものは `pd/` 配下に置く。やめるときは `/pd:pd-uninstall`
-- `pd/products/` は上書き、`pd/analyses/` `pd/voices/` `pd/simulations/` は追記のみ
+- `pd/products/` と `pd/specs/` は上書き、`pd/analyses/` `pd/voices/` `pd/simulations/` `pd/decisions/` `pd/validations/` `pd/measurements/` `pd/reviews/` は追記のみ
 - Evidence には `Fact` / `Interpretation` / `Hypothesis` / `Unknown` のいずれかを付ける
 - 元データ・個人情報を置かない。`pd/voices/` は匿名化してから記録する
-- 索引ファイルを作らない
+- 索引ファイルを作らない。ボイスの一覧は `voices.mjs query` / `stats` で取る
+- UI/UX の作業は `ux-layer-triage` から始める。UI を作る/直す前に対象画面のボイスを引き当てる
+- 台帳に無い改善案は「デザイナー起案」と明記する
 - 過去の Note を修正しない。認識が変わったら新しい Note を追加する
 
 7. **最初の Context** — 対象プロダクトが分かっていれば、plugin の `skills/pd/products/_template.md` を Schema として `pd/products/{product-name}.md` を作る。分からなければ作らず、`/pd:pd` の初回実行時に作ると伝える

@@ -35,6 +35,16 @@ expect() {   # $1 = ラベル / $2 = 期待する検出メッセージ（部分�
     fi
 }
 
+# 違反が1件も出ないこと（正常系）
+expect_ok() {   # $1 = ラベル
+    if PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" >/dev/null 2>&1; then
+        printf '  ✓ %s\n' "$1"; pass=$((pass + 1))
+    else
+        printf '  ✗ %s — 違反が出た:\n' "$1"; fail=$((fail + 1))
+        PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" 2>&1 | sed 's/^/      /'
+    fi
+}
+
 # plugin 自身の検証（配布物として欠けていないか）
 expect_plugin() {
     if PD_PROJECT_DIR="$PLUGIN" python3 "$VALIDATE" 2>&1 | grep -q "$2"; then
@@ -241,55 +251,165 @@ prune
 # ---------------------------------------------------------------- Voice
 
 mkdir -p "$PD/voices/testprod/2026"
-cat > "$PD/voices/testprod/2026/20260901-interview.md" <<'EOF'
+
+# v2.0.0 の書式。1ファイル = 1声。frontmatter 12キー必須。
+voice() {   # $1 = 追加/上書きする frontmatter 行、$2 = 本文
+  cat > "$PD/voices/testprod/2026/VOICE-001-slow.md" <<EOF
 ---
+id: VOICE-001
 product: testprod
-date: 2026-09-01
+type: pain
 source: interview
-context: 商談
+speaker_role: guest
+speaker_id: G-01
+captured_at: 2026-09-01
+captured_by: tester
+layer: 未判定
+severity: medium
+frequency: 1
+status: 未検証
+$1
 ---
-田中さん: 「使いにくい」
-連絡先: taro@example.com
+$2
 EOF
+}
+
+voice "" "田中さん: 「使いにくい」
+連絡先: taro@example.com"
 expect "敬称つき実名の検出" "実名らしい呼称"
 expect "メールアドレスの検出" "メールアドレス"
 expect "発話者 ID 形式の欠落" "ID 形式で書かれていない"
 
-cat > "$PD/voices/testprod/2026/20260901-interview.md" <<'EOF'
----
-product: testprod
-date: 2026-09-01
-source: interview
-context: 商談
----
-利用者A-1（小規模）: 「担当の高橋に確認します」
-EOF
+voice "" "利用者A-1（小規模）: 「担当の高橋に確認します」"
 expect "敬称なし実名（姓）の検出" "実名らしい語"
 
-cat > "$PD/voices/testprod/2026/20260901-interview.md" <<'EOF'
----
-product: testprod
-date: 2026-09-01
-source: interview
-context: 商談
----
-利用者A-1: 「速い」
-「前のやり方のほうが早い」
-EOF
+voice "" "利用者A-1: 「速い」
+「前のやり方のほうが早い」"
 expect "発話行の形式違反" "発話行は"
 
-cat > "$PD/voices/testprod/2026/20260901-random.md" <<'EOF'
+voice "screen: guest/top" "利用者A-1: 「速い」"
+expect_ok "任意キー screen は通る"
+
+voice "mood: happy" "利用者A-1: 「速い」"
+expect "未知の frontmatter キー" "未知の frontmatter キー"
+
+voice "" "利用者A-1: 「速い」"
+sed -i.bak 's/^type: pain$/type: つらい/' "$PD/voices/testprod/2026/VOICE-001-slow.md"
+rm -f "$PD/voices/testprod/2026/VOICE-001-slow.md.bak"
+expect "type が enum 外" "type が不正"
+
+voice "" "利用者A-1: 「速い」"
+sed -i.bak 's/^id: VOICE-001$/id: VOICE-009/' "$PD/voices/testprod/2026/VOICE-001-slow.md"
+rm -f "$PD/voices/testprod/2026/VOICE-001-slow.md.bak"
+expect "id とファイル名の不一致" "ファイル名の番号"
+
+voice "" "利用者A-1: 「速い」"
+sed -i.bak 's/^captured_at: 2026-09-01$/captured_at: 2025-09-01/' "$PD/voices/testprod/2026/VOICE-001-slow.md"
+rm -f "$PD/voices/testprod/2026/VOICE-001-slow.md.bak"
+expect "年フォルダと captured_at の不一致" "captured_at"
+
+voice "" "利用者A-1: 「速い」"
+expect_ok "正しいボイスは通る"
+rm -r "$PD/voices/testprod"
+prune
+
+# ---------------------------------------------------------------- UXDR
+
+mkdir -p "$PD/decisions/testprod/2026"
+uxdr() {   # $1 = kind、$2 = 本文
+  cat > "$PD/decisions/testprod/2026/UXDR-20260901-01-nav.md" <<EOF
 ---
 product: testprod
 date: 2026-09-01
-source: random
-context: 雑談
+layer: 骨格
+kind: $1
+status: 有効
 ---
-利用者A-1: 「速い」
+
+# UXDR-20260901-01 — 試験
+
+## 決めたこと
+
+- 何か
+
+$2
 EOF
-rm "$PD/voices/testprod/2026/20260901-interview.md"
-expect "取得経路が許可外" "許可されていない"
-rm -r "$PD/voices/testprod"
+}
+
+uxdr "決定" "## 根拠
+
+なし
+
+## 影響範囲
+
+- 変わらなかったもの: 無し"
+expect "決めなかったことの節が無い" "決めなかったこと"
+
+uxdr "決定" "## 決めなかったこと
+
+保留。
+
+## 根拠
+
+なし
+
+## 影響範囲
+
+- 変わらなかったもの: 無し"
+expect "未決定に3列が無い" "何が分かれば"
+
+uxdr "作業仮説" "## 決めなかったこと
+
+| 論点 | 何が分かれば決まるか | いつまでに | 誰が |
+|---|---|---|---|
+| A | B | 2026-09-30 | BIZ |
+
+## 根拠
+
+なし
+
+## 棄却条件
+
+- そのうち分かる
+
+## 影響範囲
+
+- 変わらなかったもの: 無し"
+expect "棄却条件に閾値が無い" "観測可能な閾値"
+
+uxdr "決定" "## 決めなかったこと
+
+| 論点 | 何が分かれば決まるか | いつまでに | 誰が |
+|---|---|---|---|
+| A | B | 2026-09-30 | BIZ |
+
+## 根拠
+
+なし
+
+## 影響範囲
+
+- 下流の spec: 無し"
+expect "影響範囲に変わらなかったものが無い" "変わらなかったもの"
+
+uxdr "決定" "## 決めなかったこと
+
+| 論点 | 何が分かれば決まるか | いつまでに | 誰が |
+|---|---|---|---|
+| A | B | 2026-09-30 | BIZ |
+
+## 根拠
+
+| 種別 | 内容 |
+|---|---|
+| 計測値 | 未取得 |
+
+## 影響範囲
+
+- 変わらなかったもの: 表層の spec（確認済み）"
+expect_ok "正しい UXDR は通る"
+rm -r "$PD/decisions/testprod"
+prune
 prune
 
 # ---------------------------------------------------------------- 予測データ
@@ -558,7 +678,8 @@ fi
 # **移動しても承認なしで通る**ところまで確かめる（ここが壊れると、更新した
 # 途端に既存プロジェクトが全ファイル「台帳にあるが存在しない」で落ちる）。
 
-for d in products analyses voices simulations; do
+# DATA_DIRS と同じ並び。1つでも pd/ 側に残ると根の判定が旧レイアウトへ切り替わらない
+for d in products analyses voices simulations specs decisions validations measurements reviews; do
     [ -d "$PD/$d" ] && mv "$PD/$d" "$PROJ/$d" || true
 done
 

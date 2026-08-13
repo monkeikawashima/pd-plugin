@@ -8,6 +8,47 @@ pd plugin の版ごとの変更。**判定（`validate.py` のルール）が変
 - **MINOR** — 判定・Skill・コマンドの追加。既存データはそのまま通る
 - **PATCH** — 文言修正・不具合修正
 
+## [2.0.0] — 2026-08-13
+
+**UI/UX の作業を pd に統合した。**これまで UI/UX の規律（層の判定・顧客ボイス台帳・デザインレビュー・アクセシビリティ検算）は各プロジェクトが `uiux/` のような独自ディレクトリで持っていた。pd と併用すると**同じ事実を二箇所に書く**ことになり、必ず片方が古くなる。plugin を入れるだけで UI/UX の改善まで回せるようにした。
+
+### 破壊的変更
+
+- **ボイスの書式を全面的に変えた。** 1ファイル = 1機会（面談単位）から **1ファイル = 1声**（論点単位）へ。
+
+  ```
+  旧: pd/voices/{product}/{年}/YYYYMMDD-{取得経路}.md   frontmatter 4キー
+  新: pd/voices/{product}/{年}/VOICE-NNN-{slug}.md      frontmatter 12キー必須
+  ```
+
+  変えた理由は**引き当て**。UI を直すときに必要なのは「その画面について誰が何と言ったか」で、機会単位でまとめると `screen` で引けない。**引けない台帳は無いのと同じ。**
+
+  ⚠️ **既存の voices は通らなくなる。**移行するか、取り直す。新しい書式は `skills/pd/uiux/voice-schema.md`。
+
+- **`voices.mjs index` を廃止した。**索引ファイルは更新漏れで実態と乖離する（pd の既存規約）。一覧は `query` / `stats` で取る。
+
+### 追加
+
+- **UI/UX スキル10種** — `ux-layer-triage`（層の判定。UI の話が出たら最初に使う）/ `user-voice-ledger` / `user-story-writer` / `object-model-reviewer` / `a11y-contrast-guard` / `ux-design-review` / `ux-validation-planner` / `ux-measurement` / `ux-decision-record` / `ux-update-cascade`
+
+- **ボイス台帳 CLI** — `scripts/voices.mjs`。依存パッケージ0（Node 標準モジュールのみ）。
+
+  ```
+  node "${CLAUDE_PLUGIN_ROOT}/scripts/voices.mjs" query --screen <画面名>
+  ```
+
+  **UI を作る・直す前に必ず実行する。**0件は「問題が無い」ではなく「記録されていない」。
+
+- **置き場所を5つ追加** — `pd/specs/`（層ごとの現在値。上書き）/ `pd/decisions/`（UXDR）/ `pd/validations/`（VP）/ `pd/measurements/`（MP）/ `pd/reviews/`（DR）。後ろ4つは**追記のみ**。そのとき何を決めたかを後から書き換えると、判断の経緯が消えるため。
+
+- **判定の追加** — UXDR に「決めなかったこと」（何が分かれば決まるか／いつまでに／誰が の3列）と「影響範囲の変わらなかったもの」を必須にした。作業仮説には**観測可能な閾値を持つ棄却条件**を必須にした。レビュー結果には根拠ボイスか「デザイナー起案」の明記を必須にした。
+
+- **規律とテンプレート** — `skills/pd/uiux/rules/`（共通言語・層の規律・決定規則・証拠規則・アクセシビリティ）、`skills/pd/uiux/templates/`（画面仕様・ユーザーストーリー・UXDR・検証計画）、`glossary.md`。
+
+### 設計上の注意
+
+pd（問題 → 原因 → 仮説 → 検証 → 決定）と UI/UX の5段階（戦略 → 要件 → 構造 → 骨格 → 表層）は**直交する**。前者は推論の流れ、後者は抽象度の階層。同じ事実を両方に書かないため、**層ごとの現在値は `pd/specs/`、推論の履歴は `pd/analyses/`** と置き場所で分けている。
+
 ## [1.4.0] — 2026-08-13
 
 ### 変更
