@@ -6,18 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // empty' | { read -r f; case \"$f\" in */skills/pd/SKILL.md|*/skills/pd/framework/*|*/skills/pd/products/_template.md) printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"pd Skill を変更しました。同じターン内で pd-skill-blueprint.md の該当セクション（該当ファイルの「書くこと」/ §13 論点表 / §17 Acceptance Criteria）を更新してください。加えて、利用者の操作・置き場所・守るべきルール・用語が変わった場合は README.md も更新してください。ユーザー確認は不要です。\"}}';; esac; }",
-            "statusMessage": "blueprint / README 同期チェック"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -f \"$CLAUDE_PROJECT_DIR/pd/ledger.json\" ] || exit 0; jq -r '.tool_input.file_path // .tool_response.filePath // empty' | { read -r f; case \"$f\" in \"$CLAUDE_PROJECT_DIR\"/analyses/*|\"$CLAUDE_PROJECT_DIR\"/voices/*|\"$CLAUDE_PROJECT_DIR\"/simulations/*|\"$CLAUDE_PROJECT_DIR\"/products/*) out=$(PD_PROJECT_DIR=\"$CLAUDE_PROJECT_DIR\" python3 \"$CLAUDE_PLUGIN_ROOT/scripts/validate.py\" \"$f\" 2>&1) || printf '%s' \"$(jq -nc --arg r \"$out\" '{decision:\"block\",reason:(\"規約違反です。修正してから続けてください（判定: pd plugin の validate.py）\\n\" + $r)}')\" ;; esac; }",
-            "statusMessage": "規約チェック"
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" post-tool-use",
+            "statusMessage": "pd 規約チェック"
           }
         ]
       }
@@ -27,8 +17,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -f \"$CLAUDE_PROJECT_DIR/pd/ledger.json\" ] || exit 0; out=$(PD_PROJECT_DIR=\"$CLAUDE_PROJECT_DIR\" python3 \"$CLAUDE_PLUGIN_ROOT/scripts/validate.py\" 2>&1) || printf '%s' \"$(jq -nc --arg r \"$out\" '{systemMessage:(\"⚠ 規約違反が残っています\\n\" + $r)}')\"",
-            "statusMessage": "規約チェック（全体）"
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" stop",
+            "statusMessage": "pd 規約チェック（全体）"
           }
         ]
       }
@@ -38,8 +28,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -f \"$CLAUDE_PROJECT_DIR/pd/ledger.json\" ] || exit 0; out=$(PD_PROJECT_DIR=\"$CLAUDE_PROJECT_DIR\" python3 \"$CLAUDE_PLUGIN_ROOT/scripts/validate.py\" 2>&1) || printf '%s' \"$(jq -nc --arg r \"$out\" '{systemMessage:(\"⚠ 規約違反が残っています\\n\" + $r)}')\"",
-            "statusMessage": "規約チェック"
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" session-start",
+            "statusMessage": "pd 規約チェック"
           }
         ]
       }

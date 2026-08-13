@@ -3,7 +3,7 @@
 """pd（Product Discovery）の規約検証。
 
 使い方:
-    /pd-validate                                      Claude 経由（推奨）
+    /pd:pd-validate                                      Claude 経由（推奨）
     python3 <plugin>/scripts/validate.py              全体を検証
     python3 <plugin>/scripts/validate.py <path>...    指定ファイルだけ検証
 
@@ -90,7 +90,7 @@ SURNAMES = """佐藤 鈴木 高橋 田中 伊藤 渡辺 山本 中村 小林 加
 # 台帳はプロジェクトごと。plugin 側には置かない（更新で消えるため）
 LEDGER = ROOT / "pd/ledger.json"
 LEDGER_LOG = ROOT / "pd/ledger-log.md"
-ACCEPT_HINT = "/pd-validate --accept で承認する"
+ACCEPT_HINT = "/pd:pd-validate --accept で承認する"
 IMMUTABLE_DIRS = ("analyses", "voices", "simulations")
 
 # 新しい規約（反証 / 予測値 / 棄却条件の閾値）の適用開始日
@@ -495,6 +495,7 @@ PLUGIN_FILES = [
     "commands/pd-init.md",
     "commands/pd-validate.md",
     "scripts/validate.py",
+    "scripts/hook.py",
     "scripts/selftest.sh",
     "skills/pd/SKILL.md",
     "skills/pd/products/_template.md",
@@ -520,18 +521,60 @@ def check_plugin_guards() -> None:
             hooks = {}
         for event in ("PostToolUse", "Stop", "SessionStart"):
             body = json.dumps(hooks.get(event, []), ensure_ascii=False)
-            if "validate.py" not in body:
-                err(hooks_file, f"{event} の hook が消えている（validate.py）")
-        sync = json.dumps(hooks.get("PostToolUse", []), ensure_ascii=False)
-        if "pd-skill-blueprint.md" not in sync:
-            err(hooks_file, "blueprint / README 同期の hook が消えている")
-        # plugin は全プロジェクトで有効になる。pd を使わないプロジェクトで
-        # 動くと毎回違反を出すため、目印が無ければ何もしないこと。
-        for event in ("Stop", "SessionStart"):
-            body = json.dumps(hooks.get(event, []), ensure_ascii=False)
-            if "pd/ledger.json" not in body:
-                err(hooks_file, f"{event} の hook に pd プロジェクトの判定が無い"
-                                "（pd を使わないプロジェクトでも動いてしまう）")
+            if "hook.py" not in body:
+                err(hooks_file, f"{event} の hook が消えている（hook.py）")
+        check_hook_portability(hooks_file)
+
+    check_hook_entrypoint()
+    check_command_names()
+
+
+# plugin のスキルは必ず「plugin名:スキル名」に名前空間化される。素の `/pd-init`
+# と書くと、そのとおり打った利用者は「コマンドが無い」で終わる。
+BARE_COMMAND = re.compile(r"(?<![\w:/])/pd(-init|-validate)?(?![\w:\-])")
+
+DOCS = ["README.md", "CLAUDE.md", "pd-skill-blueprint.md",
+        "commands/pd-init.md", "commands/pd-validate.md", "skills/pd/SKILL.md"]
+
+
+def check_command_names() -> None:
+    for name in DOCS:
+        path = PLUGIN_ROOT / name
+        if not path.exists():
+            continue
+        for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            m = BARE_COMMAND.search(line)
+            if m:
+                err(path, f"コマンド名に名前空間が無い: {m.group(0)!r} "
+                          f"（実際に使えるのは /pd:pd{m.group(1) or ''}）", i)
+
+
+# hooks.json に書くとシェルに依存するもの。Windows には sh も jq も無いため、
+# ここに1つでも混ざると hook が丸ごと動かない環境が生まれる。
+SHELL_ISMS = ("jq ", "jq -", "case ", "esac", "printf ", "read -r", "[ -f", "$(")
+
+
+def check_hook_portability(hooks_file: Path) -> None:
+    body = hooks_file.read_text(encoding="utf-8")
+    for token in SHELL_ISMS:
+        if token in body:
+            err(hooks_file, f"シェル依存の記述がある: {token.strip()!r}"
+                            "（Windows で hook が動かない。判定は hook.py に書く）")
+
+
+def check_hook_entrypoint() -> None:
+    """hook の入口に、動くべき場面の判定が残っているか。"""
+    entry = PLUGIN_ROOT / "scripts/hook.py"
+    if not entry.exists():
+        return
+    body = entry.read_text(encoding="utf-8")
+    # plugin は全プロジェクトで有効になる。pd を使わないプロジェクトで
+    # 動くと毎回違反を出すため、目印が無ければ何もしないこと。
+    if "ledger.json" not in body:
+        err(entry, "pd プロジェクトの目印の判定が無い"
+                   "（pd を使わないプロジェクトでも動いてしまう）")
+    if "pd-skill-blueprint.md" not in body:
+        err(entry, "blueprint / README 同期の促しが消えている")
 
 
 def check_version_consistency() -> None:
@@ -581,12 +624,12 @@ def check_project_guards() -> None:
     # 履歴の代わりに台帳が必須（版管理を前提にしない）
     if not LEDGER.exists() and "--accept" not in sys.argv:
         errors.append("pd/ledger.json: 無い（過去の記録の書き換えを検出できない）。"
-                      "/pd-init で作成する")
+                      "/pd:pd-init で作成する")
 
     ci = ROOT / ".github/workflows/validate.yml"
     if not ci.exists():
         errors.append(".github/workflows/validate.yml: 無い（検証の仕組みが不完全）。"
-                      "/pd-init で作成する")
+                      "/pd:pd-init で作成する")
     else:
         # runner の既定は UTC。台帳の「当日」判定がずれ、手元で通る同日の修正が
         # CI でだけ落ちる。

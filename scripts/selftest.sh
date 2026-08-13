@@ -402,7 +402,7 @@ import json, pathlib, sys
 p = pathlib.Path(sys.argv[1])
 d = json.loads(p.read_text(encoding='utf-8'))
 d['hooks']['PostToolUse'] = [h for h in d['hooks']['PostToolUse']
-                             if 'validate.py' not in json.dumps(h)]
+                             if 'hook.py' not in json.dumps(h)]
 d['hooks'].pop('SessionStart', None)
 d['hooks'].pop('Stop', None)
 p.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -412,8 +412,23 @@ expect_plugin "SessionStart hook の削除" "SessionStart の hook が消えて�
 expect_plugin "Stop hook の削除" "Stop の hook が消えている"
 cp "$ROOT/hooks/hooks.json" "$PLUGIN/hooks/hooks.json"
 
-sed_replace "$PLUGIN/hooks/hooks.json" "pd/ledger.json" "pd/marker.json"
-expect_plugin "pd プロジェクト判定の消失" "pd プロジェクトの判定が無い"
+sed_replace "$PLUGIN/scripts/hook.py" "ledger.json" "marker.json"
+expect_plugin "pd プロジェクト判定の消失" "目印の判定が無い"
+cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
+
+sed_replace "$PLUGIN/scripts/hook.py" "pd-skill-blueprint.md" "somewhere-else.md"
+expect_plugin "blueprint 同期の促しの消失" "同期の促しが消えている"
+cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
+
+mv "$PLUGIN/scripts/hook.py" "$WORK/hook.py"
+expect_plugin "hook の入口の削除" "scripts/hook.py: 無い"
+mv "$WORK/hook.py" "$PLUGIN/scripts/hook.py"
+
+# Windows には sh も jq も無い。hooks.json にシェル構文が戻ると全滅する。
+sed_replace "$PLUGIN/hooks/hooks.json" \
+            'python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" stop' \
+            'jq -r .x | python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" stop'
+expect_plugin "シェル依存の記述の復活" "Windows で hook が動かない"
 cp "$ROOT/hooks/hooks.json" "$PLUGIN/hooks/hooks.json"
 
 mv "$PLUGIN/commands/pd-init.md" "$WORK/pd-init.md"
@@ -428,21 +443,88 @@ mv "$PLUGIN/scripts/selftest.sh" "$WORK/selftest.sh"
 expect_plugin "selftest.sh の削除" "検証の仕組みが不完全"
 mv "$WORK/selftest.sh" "$PLUGIN/scripts/selftest.sh"
 
+# plugin のスキルは必ず名前空間化される。素の /pd-init と書くと利用者が打てない。
+sed_replace "$PLUGIN/README.md" "/pd:pd-init" "/pd-init"
+expect_plugin "コマンド名の名前空間の欠落" "コマンド名に名前空間が無い"
+cp "$ROOT/README.md" "$PLUGIN/README.md"
+
 mv "$PLUGIN/CHANGELOG.md" "$WORK/CHANGELOG.md"
 expect_plugin "変更履歴の削除" "CHANGELOG.md: 無い"
 mv "$WORK/CHANGELOG.md" "$PLUGIN/CHANGELOG.md"
 
 # 版を上げたのに履歴を書き忘れた
-sed_replace "$PLUGIN/.claude-plugin/plugin.json" \
-            '"version": "1.1.0"' '"version": "9.9.9"'
-sed_replace "$PLUGIN/.claude-plugin/marketplace.json" \
-            '"version": "1.1.0"' '"version": "9.9.9"'
+# （版番号を直書きすると、版を上げるたびにこのテストが壊れて消される）
+bump() {   # $1 = 新しい版
+python3 - "$PLUGIN" "$1" <<'PY'
+import json, pathlib, sys
+root, version = pathlib.Path(sys.argv[1]), sys.argv[2]
+for name, key in (("plugin.json", None), ("marketplace.json", "plugins")):
+    p = root / ".claude-plugin" / name
+    d = json.loads(p.read_text(encoding='utf-8'))
+    if key is None:
+        d["version"] = version
+    else:
+        for entry in d[key]:
+            entry["version"] = version
+    p.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding='utf-8')
+PY
+}
+bump 9.9.9
 expect_plugin "版を上げて履歴を書き忘れる" "9.9.9 の項目が無い"
 cp "$ROOT/.claude-plugin/marketplace.json" "$PLUGIN/.claude-plugin/marketplace.json"
 
 # plugin.json だけ上げ忘れた（marketplace.json 側だけ上げても更新は届かない）
 expect_plugin "版の記載の食い違い" "version が plugin.json と違う"
 cp "$ROOT/.claude-plugin/plugin.json" "$PLUGIN/.claude-plugin/plugin.json"
+
+# ------------------------------------------------------- hook の挙動（形ではなく動き）
+
+# hooks.json に名前が載っていても、実際に止められなければ意味がない。
+hook_case() {   # $1 = ラベル / $2 = event / $3 = 入力JSON / $4 = 期待（空なら無出力）
+    out=$(printf '%s' "$3" | CLAUDE_PROJECT_DIR="$PROJ" \
+          python3 "$PLUGIN/scripts/hook.py" "$2" 2>/dev/null)
+    if [ -z "$4" ]; then
+        if [ -z "$out" ]; then
+            printf '  ✓ %s\n' "$1"; pass=$((pass + 1))
+        else
+            printf '  ✗ %s — 何か出力した: %s\n' "$1" "$out"; fail=$((fail + 1))
+        fi
+    elif printf '%s' "$out" | grep -q "$4"; then
+        printf '  ✓ %s\n' "$1"; pass=$((pass + 1))
+    else
+        printf '  ✗ %s — 期待 %s / 実際 %s\n' "$1" "$4" "$out"; fail=$((fail + 1))
+    fi
+}
+
+BADFILE="$PROJ/analyses/testprod/2026/bad-name.md"
+printf '中身\n' > "$BADFILE"
+hook_case "違反ファイルの編集を止める" post-tool-use \
+          "{\"tool_input\":{\"file_path\":\"$BADFILE\"}}" "block"
+hook_case "Write の応答（filePath）も読む" post-tool-use \
+          "{\"tool_response\":{\"filePath\":\"$BADFILE\"}}" "block"
+hook_case "残存違反を通知する" session-start "{}" "systemMessage"
+rm -f "$BADFILE"
+prune
+
+# hook 自身の失敗で作業を止めない。止めてよいのは規約違反だけ。
+if printf 'not json' | CLAUDE_PROJECT_DIR="$PROJ" \
+   python3 "$PLUGIN/scripts/hook.py" stop >/dev/null 2>&1; then
+    printf '  ✓ 壊れた入力でも異常終了しない\n'; pass=$((pass + 1))
+else
+    printf '  ✗ 壊れた入力で異常終了した（作業が止まる）\n'; fail=$((fail + 1))
+fi
+
+# pd を使わないプロジェクトで動かないこと（全プロジェクトで有効になるため）
+OTHER="$WORK/other"
+mkdir -p "$OTHER/analyses"
+printf 'x\n' > "$OTHER/analyses/a.md"
+out=$(printf '{"tool_input":{"file_path":"%s"}}' "$OTHER/analyses/a.md" \
+      | CLAUDE_PROJECT_DIR="$OTHER" python3 "$PLUGIN/scripts/hook.py" post-tool-use 2>&1)
+if [ -z "$out" ]; then
+    printf '  ✓ pd と無関係なプロジェクトでは何もしない\n'; pass=$((pass + 1))
+else
+    printf '  ✗ pd と無関係なプロジェクトで動いている: %s\n' "$out"; fail=$((fail + 1))
+fi
 
 # ---------------------------------------------------------------- 誤検知の確認（最重要）
 

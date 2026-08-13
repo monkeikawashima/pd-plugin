@@ -8,6 +8,23 @@ pd plugin の版ごとの変更。**判定（`validate.py` のルール）が変
 - **MINOR** — 判定・Skill・コマンドの追加。既存データはそのまま通る
 - **PATCH** — 文言修正・不具合修正
 
+## [1.2.0] — 2026-08-13
+
+### 修正
+
+- **文書のコマンド名が誤っていた。** 正しくは `/pd:pd` / `/pd:pd-init` / `/pd:pd-validate`。plugin のスキルは Claude Code が必ず「plugin名:スキル名」に名前空間化するため、**文書どおりに `/pd-init` と打った利用者は「コマンドが無い」で終わっていた**
+- `validate.py` の判定を追加: 文書に名前空間の無いコマンド名が書かれていないこと
+
+### 変更
+
+- **hook を OS 非依存にした。** `hooks.json` からシェル構文（`case` / `read` / `printf`）と `jq` を排除し、`scripts/hook.py` を呼ぶだけにした。**Windows では sh も jq も無く、hook が丸ごと動かなかった。** 依存は `python3` のみ（`validate.py` が既に要求している）
+
+### 追加
+
+- `scripts/hook.py` — hook の入口。動くべき場面の判定と出力の整形だけを行う。**判定は書かない**（判定者は `validate.py` のまま）
+- `validate.py` の判定: `hooks.json` にシェル依存の記述が混ざっていないこと、`hook.py` に目印（`pd/ledger.json`）と blueprint 同期の促しが残っていること
+- `selftest.sh` に hook の**挙動**テストを追加（形が揃っていても止められなければ意味がないため）。50 → 58 件
+
 ## [1.1.0] — 2026-08-13
 
 ### 追加

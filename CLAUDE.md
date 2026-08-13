@@ -1,12 +1,12 @@
 # pd-plugin
 
-Product Discovery Skill（`/pd`）の**配布物**。
+Product Discovery Skill（`/pd:pd`）の**配布物**。
 
 ```
 .claude-plugin/   marketplace / plugin 定義
 skills/pd/        SKILL.md / framework/ / products/_template.md
 hooks/            PostToolUse / Stop / SessionStart
-commands/         /pd-init  /pd-validate
+commands/         /pd:pd-init  /pd:pd-validate
 scripts/          validate.py（唯一の判定者）/ selftest.sh
 pd-skill-blueprint.md   別プロジェクトで Skill を再構築するための指示書
 README.md         人が読む入口
@@ -67,7 +67,13 @@ typo 修正や表現の微調整だけなら更新不要。`hooks/hooks.json` �
 
 plugin の hook は、有効化した**全プロジェクト**で走る。pd と無関係なリポジトリで検証器が動くと、毎ターン違反通知が出て使い物にならない。
 
-目印（`$CLAUDE_PROJECT_DIR/pd/ledger.json`）が無ければ即 `exit 0` すること。この判定は `validate.py` が確認しており、消すと違反になる。
+目印（`$CLAUDE_PROJECT_DIR/pd/ledger.json`）が無ければ何もしないこと。判定は `scripts/hook.py` にあり、消すと `validate.py` が違反にする。
+
+### `hooks.json` にシェルを書かない
+
+`hooks.json` は `python3 scripts/hook.py {event}` を呼ぶだけにする。`jq` や `case` / `read` / `printf` を書くと、**Windows で hook が丸ごと動かない**（sh も jq も無い）。依存は `python3` 1つに寄せる — `validate.py` が既に要求しているため、これ以上増やさない。この判定も `validate.py` が見ている。
+
+`hook.py` に**規約の判定を書かない。** 判定者は `validate.py` 1つ。`hook.py` がやるのは「動くべき場面か」を決めて、結果を hook の出力形式に整えることだけ。
 
 ---
 

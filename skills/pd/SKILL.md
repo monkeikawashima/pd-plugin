@@ -38,7 +38,7 @@ plugin 側（全プロジェクト共通。/plugin update で上書きされる�
 
 以降このファイルで `products/` `analyses/` `voices/` `simulations/` と書いたものは、**すべてプロジェクト側**を指す。plugin 配下に分析データを書き込まない（更新時に消える）。
 
-プロジェクト側の置き場所がまだ無い場合は `/pd-init` で作る。
+プロジェクト側の置き場所がまだ無い場合は `/pd:pd-init` で作る。
 
 順序が本質。フレームワークは共通、分析は共通ではない。
 KPI Tree・User Journey・Driver は、**対象プロダクトの Context から毎回組み立てる**。他プロダクトのものを流用しない。Context が揃う前に組み立てない。
@@ -77,7 +77,7 @@ KPI Tree・User Journey・Driver は、**対象プロダクトの Context から
 
 分析の前に、必ず対象プロダクトを特定する。
 
-- `/pd product-a` のようにプロダクト名が指定された場合は `products/product-a.md` を参照する
+- `/pd:pd product-a` のようにプロダクト名が指定された場合は `products/product-a.md` を参照する
 - 指定が無い場合は、現在の作業対象から判断し、該当する `products/{product-name}.md` があれば参照する
 - 該当ファイルが無い場合は、`products/_template.md` の項目を Schema として、実行時に Context を構築する
 
