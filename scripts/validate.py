@@ -1061,7 +1061,17 @@ def check_duplicate_numbers() -> None:
 
 def check_repo_layout() -> None:
     skip = (".git/", ".local/", "node_modules/", f"{BASE_REL}.local/")
-    for path in ROOT.rglob("*"):
+    # pd を `pd/` に畳んでいるプロジェクトでは、走査するのは `pd/` の中だけ。
+    #
+    # アプリのソースと同居している場合（pd 専用リポジトリでない場合）、ROOT 全体を
+    # 舐めると `public/` の画像や `supabase/migrations/*.sql` まで「生データ」と
+    # 判定され、pd とは無関係の数百件で CI が常時赤になる。**常に赤い判定器は
+    # 誰も見なくなる。** pd が責任を持つのは pd が作ったものだけ。
+    #
+    # 旧レイアウト（root 直下に products/ analyses/）と plugin 自身の検証では
+    # BASE == ROOT / SELF_CHECK となり、従来どおり全体を走査する。
+    scan_root = ROOT if SELF_CHECK else BASE
+    for path in scan_root.rglob("*"):
         rel = str(path.relative_to(ROOT)).replace("\\", "/")
         if rel.startswith(skip) or not path.is_file():
             continue

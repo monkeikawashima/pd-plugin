@@ -487,9 +487,16 @@ expect "生データの混入" "生データ・画像はリポジトリに置か
 expect "索引ファイルの作成" "索引ファイルを作らない"
 rm "$PD/analyses/testprod/2026/export.csv" "$PD/analyses/testprod/index.md"
 
-touch "$PROJ/.DS_Store"
+touch "$PD/.DS_Store"
 expect "OS のノイズファイル" "OS が作る不要ファイル"
-rm -f "$PROJ/.DS_Store"
+rm -f "$PD/.DS_Store"
+
+# pd の管轄は pd/ の中だけ。アプリのソースと同居しているリポジトリで root 全体を
+# 見ると、pd と無関係のファイルで判定器が常に赤くなり、誰も見なくなる。
+mkdir -p "$PROJ/public"
+touch "$PROJ/.DS_Store" "$PROJ/public/logo.png"
+expect_ok "pd/ の外は見ない（同居しているアプリの資産で落ちない）"
+rm -rf "$PROJ/.DS_Store" "$PROJ/public"
 
 printf '\ntestprod のケースでは\n' >> "$PLUGIN/skills/analyze/framework/kpi.md"
 expect "framework への固有名の混入" "プロダクト固有名"
