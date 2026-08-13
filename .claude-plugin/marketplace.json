@@ -1,0 +1,15 @@
+{
+  "name": "pd-plugin",
+  "owner": {
+    "name": "monkeikawashima",
+    "url": "https://github.com/monkeikawashima"
+  },
+  "plugins": [
+    {
+      "name": "pd",
+      "source": "./",
+      "description": "Product Discovery Skill（/pd）と、その規約を機械的に判定する検証器",
+      "version": "1.0.0"
+    }
+  ]
+}

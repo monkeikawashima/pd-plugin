@@ -1,0 +1,17 @@
+{
+  "name": "pd",
+  "version": "1.0.0",
+  "description": "Product Discovery Skill。KPI・利用状況・UX・効果検証から Root Cause と Driver を導き、Experiment と意思決定まで進める。分析の規約は同梱の検証器が機械的に判定する。",
+  "author": {
+    "name": "monkeikawashima"
+  },
+  "repository": "https://github.com/monkeikawashima/pd-plugin",
+  "license": "MIT",
+  "keywords": [
+    "product-discovery",
+    "kpi",
+    "experiment",
+    "user-research",
+    "decision"
+  ]
+}

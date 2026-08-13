@@ -1,0 +1,25 @@
+name: validate
+
+# plugin 自身の検証。配布物が欠けていないか（validate.py）と、
+# 検証器が本当に違反を検出するか（selftest.sh）を見る。
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      # 台帳の「書いた当日の修正は通す」判定は実行マシンのローカル時刻で行う。
+      # runner の既定は UTC のため、日本時間に合わせないと selftest がずれる。
+      TZ: Asia/Tokyo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 配布物が揃っているか
+        run: python3 scripts/validate.py
+
+      - name: 検証器が違反を検出するか
+        run: sh scripts/selftest.sh
