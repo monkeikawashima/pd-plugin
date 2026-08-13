@@ -497,6 +497,7 @@ PLUGIN_FILES = [
     "scripts/validate.py",
     "scripts/hook.py",
     "scripts/selftest.sh",
+    "scripts/release.sh",
     "skills/pd/SKILL.md",
     "skills/pd/products/_template.md",
     ".github/workflows/validate.yml",

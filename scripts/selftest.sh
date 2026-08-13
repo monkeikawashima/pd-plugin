@@ -443,6 +443,10 @@ mv "$PLUGIN/scripts/selftest.sh" "$WORK/selftest.sh"
 expect_plugin "selftest.sh の削除" "検証の仕組みが不完全"
 mv "$WORK/selftest.sh" "$PLUGIN/scripts/selftest.sh"
 
+mv "$PLUGIN/scripts/release.sh" "$WORK/release.sh"
+expect_plugin "配布手順の削除" "scripts/release.sh: 無い"
+mv "$WORK/release.sh" "$PLUGIN/scripts/release.sh"
+
 # plugin のスキルは必ず名前空間化される。素の /pd-init と書くと利用者が打てない。
 sed_replace "$PLUGIN/README.md" "/pd:pd-init" "/pd-init"
 expect_plugin "コマンド名の名前空間の欠落" "コマンド名に名前空間が無い"

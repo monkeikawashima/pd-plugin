@@ -79,16 +79,23 @@ plugin の hook は、有効化した**全プロジェクト**で走る。pd と
 
 ## 4. 版を上げるときの手順
 
-判定を追加・変更したら、次を**同じ作業内で**行う。
+判定を追加・変更したら、次の2つだけを行う。
 
-1. `.claude-plugin/plugin.json` と `marketplace.json` の `version` を上げる（両方。片方だけだと `validate.py` が落とす）
-2. `CHANGELOG.md` に新しい版の項目を書く（**判定が変わった版は、利用者側で今まで通っていたファイルが落ちる**。何が変わったかを書かないと、更新するかを判断できない）
-3. `git tag v{version}` を打って push する
-4. 利用プロジェクトの `.github/workflows/validate.yml` の `ref` を上げる
+1. `CHANGELOG.md` に新しい版の項目を書く（**判定が変わった版は、利用者側で今まで通っていたファイルが落ちる**。何が変わったかは機械には書けない）
+2. 変更をコミットしてから配る
+
+```bash
+sh scripts/release.sh 1.3.0             # 版の書き換え → 検証 → コミット → タグ → push
+sh scripts/release.sh 1.3.0 --no-push   # 手元で止めて確認する
+```
+
+**版を手で書き換えない。** `plugin.json` / `marketplace.json` / `pd-init.md` の `ref` の3箇所を release.sh が揃えて書き換える。手でやると必ずどれかが取り残される。
+
+**未コミットのままタグを打たない。** タグが古い内容を指し、手元と CI で判定が食い違う。release.sh は作業ツリーが汚れていれば中止する（この事故が3回続いたため仕組みで止めている）。
 
 **Claude Code は `plugin.json` の `version` を更新の判定キーにする。** 上げなければ `/plugin update` しても「already at the latest version」で何も起きず、利用者に届かない。
 
-**4 を忘れると、手元（`/plugin update` 済み）と CI（旧タグ）で判定が食い違う。** 手元で通ったものが CI で落ちる、あるいはその逆が起きる。
+既に稼働している利用プロジェクトがある場合は、その `.github/workflows/validate.yml` の `ref` も上げる。**忘れると、手元（`/plugin update` 済み）と CI（旧タグ）で判定が食い違う。**
 
 ### 更新は自動では届かない
 
