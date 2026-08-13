@@ -8,6 +8,33 @@ pd plugin の版ごとの変更。**判定（`validate.py` のルール）が変
 - **MINOR** — 判定・Skill・コマンドの追加。既存データはそのまま通る
 - **PATCH** — 文言修正・不具合修正
 
+## [1.4.0] — 2026-08-13
+
+### 変更
+
+- **プロジェクト側の置き場所を `pd/` 配下にまとめた。** `products/` `analyses/` `voices/` `simulations/` `.local/` が root 直下に散っていたため、**やめたいときにどれが pd のものか判別できなかった**。今後 `/pd:pd-init` は `pd/` の中だけに作る（`pd/products/` `pd/analyses/` …）。`pd/` の外に出るのは `CLAUDE.md` と `.github/workflows/validate.yml` の2つだけ
+
+  **既に使っているプロジェクトは、そのままで通る。移動は不要。** 検証器が root 直下の旧レイアウトも読み続ける。移したい場合の手順は README の「置き場所を移す」にある。**移しても台帳の承認は要らない**（記録のキーを根からの相対パスにしたため）
+
+  ⚠️ 新旧を混在させないこと。`pd/analyses/` と `analyses/` が両方あると、`pd/` 側だけが検証対象になり、root 直下は素通りする
+
+- `/pd:pd-init` が `.gitignore` に書く行が `.local/` から `pd/.local/` になった。旧レイアウトのプロジェクトで書き換える必要は無い
+
+### 追加
+
+- **`/pd:pd-uninstall`** — プロジェクトに作ったものを一覧・削除する。plugin のアンインストール（`/plugin uninstall`）はプロジェクト側のファイルに触れないため、片付けはこのコマンドが受け持つ
+
+  ```
+  /pd:pd-uninstall                一覧表示のみ（何も削除しない）
+  /pd:pd-uninstall --keep-data    仕組みだけ消す。分析結果は残す
+  /pd:pd-uninstall --purge        分析結果ごと全部消す
+  ```
+
+  **plugin より先に実行する**（plugin を外すとこのコマンドも消える）。`CLAUDE.md` / `.gitignore` / CI は pd が足した行・節だけを消し、ファイルごとは削除しない
+
+- `validate.py` の判定: `commands/pd-uninstall.md` が配布物に含まれていること
+- `selftest.sh` に旧レイアウトの検証を追加（root 直下でも通ること・hook が動くこと）。61 → 63 件
+
 ## [1.3.0] — 2026-08-13
 
 ### 追加

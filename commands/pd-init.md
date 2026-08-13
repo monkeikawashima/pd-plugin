@@ -8,27 +8,30 @@ description: pd を使うプロジェクトの置き場所・台帳・CI・規�
 
 ## 手順
 
-1. **既存の確認** — `products/` `analyses/` `pd/ledger.json` が既にあれば、その旨を伝えて**何も壊さない**。不足しているものだけ足す
+1. **既存の確認** — `pd/` または root 直下の `products/` `analyses/` が既にあれば、その旨を伝えて**何も壊さない**。不足しているものだけ足す
 
-2. **置き場所を作る**
+   **root 直下に `products/` `analyses/` がある場合は旧レイアウト。** 移動しない。検証器がそのまま読む（`pd/` へ移したい場合の手順は README の「置き場所を移す」）
+
+2. **置き場所を作る** — pd が作るものは `pd/` 1つに収める。**消したいときに、どれが pd のものか分かるようにするため**
 
 ```
-products/          プロダクトの Context（現在値）
-analyses/          分析の履歴（追記のみ）
-voices/            発話の逐語（匿名化済み・追記のみ）
-simulations/       予測データ（Evidence ではない）
-.local/            元データの一時置き場（共有しない）
-pd/                台帳（過去の記録の書き換えを検出する）
+pd/
+├── products/       プロダクトの Context（現在値）
+├── analyses/       分析の履歴（追記のみ）
+├── voices/         発話の逐語（匿名化済み・追記のみ）
+├── simulations/    予測データ（Evidence ではない）
+├── .local/         元データの一時置き場（共有しない）
+└── ledger.json     台帳（過去の記録の書き換えを検出する）
 ```
 
-空ディレクトリは残らないので、`.local/README.md` に「ここに置いた元データは共有しない。作業後に消す」旨を書いて作る。他は最初のファイルが書かれた時点でできるため、**先に空フォルダを作らない**。
+空ディレクトリは残らないので、`pd/.local/README.md` に「ここに置いた元データは共有しない。作業後に消す」旨を書いて作る。他は最初のファイルが書かれた時点でできるため、**先に空フォルダを作らない**。
 
 3. **台帳を作る** — `pd/ledger.json` に `{}` を書く。このファイルの有無が「pd を使うプロジェクトか」の目印になり、無いと hook が動かない
 
 4. **`.gitignore`** — 無ければ作る。あれば次の行が無い場合だけ追記する
 
 ```
-.local/
+pd/.local/
 .DS_Store
 ```
 
@@ -65,13 +68,14 @@ jobs:
 6. **CLAUDE.md** — 無ければ作り、あれば「pd の規約」節を追記する（既にあれば触らない）。内容は次を含める
 
 - 判定者は1つ。`/pd:pd-validate` が唯一の判定者で、人の解釈で合否を決めない
-- `products/` は上書き、`analyses/` `voices/` `simulations/` は追記のみ
+- pd が作るものは `pd/` 配下に置く。やめるときは `/pd:pd-uninstall`
+- `pd/products/` は上書き、`pd/analyses/` `pd/voices/` `pd/simulations/` は追記のみ
 - Evidence には `Fact` / `Interpretation` / `Hypothesis` / `Unknown` のいずれかを付ける
-- 元データ・個人情報を置かない。`voices/` は匿名化してから記録する
+- 元データ・個人情報を置かない。`pd/voices/` は匿名化してから記録する
 - 索引ファイルを作らない
 - 過去の Note を修正しない。認識が変わったら新しい Note を追加する
 
-7. **最初の Context** — 対象プロダクトが分かっていれば、plugin の `skills/pd/products/_template.md` を Schema として `products/{product-name}.md` を作る。分からなければ作らず、`/pd:pd` の初回実行時に作ると伝える
+7. **最初の Context** — 対象プロダクトが分かっていれば、plugin の `skills/pd/products/_template.md` を Schema として `pd/products/{product-name}.md` を作る。分からなければ作らず、`/pd:pd` の初回実行時に作ると伝える
 
 8. **検証** — `/pd:pd-validate` を実行し、違反が出ないことを確認してから完了を報告する
 

@@ -48,16 +48,46 @@ ROOT = _project_root()
 SELF_CHECK = ROOT == PLUGIN_ROOT
 
 
+# 分析データの置き場所（プロジェクト側）
+DATA_DIRS = ("products", "analyses", "voices", "simulations")
+
+
+def _base_dir() -> Path:
+    """分析データの根。v1.4.0 から `pd/` 配下に畳んだ。
+
+    畳んだ理由は、消したいときに「どれが pd のものか」が分からなかったこと。
+    root 直下の `products/` `analyses/` は名前から出所が読めない。
+
+    既に root 直下で運用しているプロジェクトはそのまま読み続ける。移行を
+    強制しない（台帳のキーはこの根からの相対パスなので、移動しても壊れない）。
+    """
+    new = ROOT / "pd"
+    if any((new / d).exists() for d in DATA_DIRS):
+        return new
+    if any((ROOT / d).exists() for d in DATA_DIRS):
+        return ROOT
+    if LEGACY_PRODUCTS.exists():   # plugin 化より前のレイアウト
+        return ROOT
+    return new
+
+
+# plugin 化より前は Context を skill の中に置いていた
+LEGACY_PRODUCTS = ROOT / ".claude/skills/pd/products"
+
+BASE = _base_dir()
+# 表示用の接頭辞。旧レイアウトでは空になる
+BASE_REL = "" if BASE == ROOT else str(BASE.relative_to(ROOT)) + "/"
+
+
 def _products_dir() -> Path:
     """Context の置き場所。plugin 化より前のレイアウトも読めるようにする。"""
-    legacy = ROOT / ".claude/skills/pd/products"
-    if not (ROOT / "products").exists() and legacy.exists():
-        return legacy
-    return ROOT / "products"
+    if not (BASE / "products").exists() and LEGACY_PRODUCTS.exists():
+        return LEGACY_PRODUCTS
+    return BASE / "products"
 
 
 PRODUCTS_DIR = _products_dir()
-PRODUCTS_REL = str(PRODUCTS_DIR.relative_to(ROOT))
+PRODUCTS_REL = str(PRODUCTS_DIR.relative_to(BASE))
 FRAMEWORK_DIR = PLUGIN_ROOT / "skills/pd/framework"
 
 RAW_EXT = {".csv", ".tsv", ".xlsx", ".sql", ".dump", ".sqlite", ".sqlite3",
@@ -87,7 +117,9 @@ SURNAMES = """佐藤 鈴木 高橋 田中 伊藤 渡辺 山本 中村 小林 加
 島田 谷口 大野 高田 丸山 今井 河野 藤本 村田 武田 上野 杉山 増田 小島 平野 大塚 久保
 松井 岩崎 桜井 野口 松尾 野村 渡部 菊地 木下 佐野 市川 水野 新井 小山 大西""".split()
 
-# 台帳はプロジェクトごと。plugin 側には置かない（更新で消えるため）
+# 台帳はプロジェクトごと。plugin 側には置かない（更新で消えるため）。
+# 位置は両レイアウトで同じ（新: BASE 直下 / 旧: root 直下の pd/）。
+# hook.py もこの位置を「pd を使うプロジェクトか」の目印にしている。
 LEDGER = ROOT / "pd/ledger.json"
 LEDGER_LOG = ROOT / "pd/ledger-log.md"
 ACCEPT_HINT = "/pd:pd-validate --accept で承認する"
@@ -134,7 +166,7 @@ def save_ledger(data: dict[str, str]) -> None:
 def immutable_files() -> list[Path]:
     out = []
     for d in IMMUTABLE_DIRS:
-        base = ROOT / d
+        base = BASE / d
         if base.exists():
             out += sorted(base.rglob("*.md"))
     return out
@@ -146,7 +178,9 @@ def check_ledger(paths: list[Path], accept: bool, full: bool) -> None:
     today = datetime.now().strftime("%Y-%m-%d")
     changed, added, missing = [], [], []
     for path in paths:
-        rel = str(path.relative_to(ROOT))
+        # 台帳のキーは分析データの根（BASE）からの相対パス。root 直下から
+        # `pd/` 配下へ移しても、キーが変わらず既存の台帳がそのまま使える。
+        rel = str(path.relative_to(BASE))
         h = digest(path)
         entry = ledger.get(rel)
         if entry is None:
@@ -164,7 +198,7 @@ def check_ledger(paths: list[Path], accept: bool, full: bool) -> None:
                     ledger[rel] = {"hash": h, "seen": entry.get("seen", today)}
 
     if full:
-        present = {str(p.relative_to(ROOT)) for p in paths}
+        present = {str(p.relative_to(BASE)) for p in paths}
         missing = [rel for rel in ledger if rel not in present]
         if accept:
             for rel in missing:
@@ -172,11 +206,11 @@ def check_ledger(paths: list[Path], accept: bool, full: bool) -> None:
 
     if changed and not accept:
         for rel in changed:
-            errors.append(f"{rel}: 過去の記録が変更されている（追記のみのルール違反）。"
+            errors.append(f"{BASE_REL}{rel}: 過去の記録が変更されている（追記のみのルール違反）。"
                           f"表記統一などの正当な変更なら {ACCEPT_HINT}")
     if missing and not accept:
         for rel in missing:
-            errors.append(f"{rel}: 台帳にあるが存在しない（削除またはリネーム）。"
+            errors.append(f"{BASE_REL}{rel}: 台帳にあるが存在しない（削除またはリネーム）。"
                           f"意図した操作なら {ACCEPT_HINT}")
     if accept or (full and not errors):
         save_ledger(ledger)
@@ -192,15 +226,15 @@ def check_ledger(paths: list[Path], accept: bool, full: bool) -> None:
                             "承認は「表記の統一だけ」に限る。判断・数値・結論を変えた場合は、"
                             "承認せず新しい Note を書く。\n\n")
                 for rel in changed:
-                    f.write(f"- {today}  {rel}  変更を承認\n")
+                    f.write(f"- {today}  {BASE_REL}{rel}  変更を承認\n")
                 for rel in missing:
-                    f.write(f"- {today}  {rel}  削除/リネームを承認\n")
+                    f.write(f"- {today}  {BASE_REL}{rel}  削除/リネームを承認\n")
         for rel in changed:
-            notices.append(f"変更を承認: {rel}")
+            notices.append(f"変更を承認: {BASE_REL}{rel}")
         for rel in added:
-            notices.append(f"台帳に追加: {rel}")
+            notices.append(f"台帳に追加: {BASE_REL}{rel}")
         for rel in missing:
-            notices.append(f"台帳から削除: {rel}")
+            notices.append(f"台帳から削除: {BASE_REL}{rel}")
 
 
 def rel_to_root(path: Path) -> str:
@@ -211,6 +245,18 @@ def rel_to_root(path: Path) -> str:
         except ValueError:
             continue
     return str(path)
+
+
+def rel_to_base(path: Path) -> str:
+    """照合用の相対パス。分析データの根（BASE）から見る。
+
+    命名規則や Note 本文の出典表記は、どちらのレイアウトでも
+    `analyses/{プロダクト}/…` と書く。表示だけ `pd/` を前置する。
+    """
+    try:
+        return str(path.relative_to(BASE)).replace("\\", "/")
+    except ValueError:
+        return rel_to_root(path)
 
 
 def err(path: Path, msg: str, line: int | None = None) -> None:
@@ -278,14 +324,14 @@ EXPECTED = {
 
 
 def check_path(path: Path, kind: str) -> tuple[str, str, str] | None:
-    rel = rel_to_root(path)
+    rel = rel_to_base(path)
     m = PATTERNS[kind].match(rel)
     if not m:
-        err(path, f"命名規則に合わない。期待: {EXPECTED[kind]}")
+        err(path, f"命名規則に合わない。期待: {BASE_REL}{EXPECTED[kind]}")
         return None
     product, year, date = m.group(1), m.group(2), m.group(3)
     if product not in known_products():
-        err(path, f"{PRODUCTS_REL}/{product}.md が存在しない（Context のないプロダクト）")
+        err(path, f"{BASE_REL}{PRODUCTS_REL}/{product}.md が存在しない（Context のないプロダクト）")
     if not date.startswith(year):
         err(path, f"年フォルダ {year} とファイル名の日付 {date} が一致しない")
     return product, year, date
@@ -494,6 +540,7 @@ PLUGIN_FILES = [
     "hooks/hooks.json",
     "commands/pd-init.md",
     "commands/pd-validate.md",
+    "commands/pd-uninstall.md",
     "scripts/validate.py",
     "scripts/hook.py",
     "scripts/selftest.sh",
@@ -532,10 +579,11 @@ def check_plugin_guards() -> None:
 
 # plugin のスキルは必ず「plugin名:スキル名」に名前空間化される。素の `/pd-init`
 # と書くと、そのとおり打った利用者は「コマンドが無い」で終わる。
-BARE_COMMAND = re.compile(r"(?<![\w:/])/pd(-init|-validate)?(?![\w:\-])")
+BARE_COMMAND = re.compile(r"(?<![\w:/])/pd(-init|-validate|-uninstall)?(?![\w:\-])")
 
 DOCS = ["README.md", "CLAUDE.md", "pd-skill-blueprint.md",
-        "commands/pd-init.md", "commands/pd-validate.md", "skills/pd/SKILL.md"]
+        "commands/pd-init.md", "commands/pd-validate.md",
+        "commands/pd-uninstall.md", "skills/pd/SKILL.md"]
 
 
 def check_command_names() -> None:
@@ -691,15 +739,15 @@ NOISE = {".DS_Store", "Thumbs.db", "desktop.ini"}
 def check_duplicate_numbers() -> None:
     """同じ日に同じ連番の Note が2つ以上ないか。"""
     seen: dict[tuple[str, str, str], list[str]] = {}
-    base = ROOT / "analyses"
+    base = BASE / "analyses"
     if not base.exists():
         return
     for path in sorted(base.rglob("*.md")):
-        m = PATTERNS["analyses"].match(str(path.relative_to(ROOT)))
+        m = PATTERNS["analyses"].match(rel_to_base(path))
         if not m:
             continue
         key = (m.group(1), m.group(3), m.group(4))
-        seen.setdefault(key, []).append(str(path.relative_to(ROOT)))
+        seen.setdefault(key, []).append(rel_to_root(path))
     for (product, date, nn), files in seen.items():
         if len(files) > 1:
             errors.append(f"{product} {date} の連番 {nn} が重複している: "
@@ -707,17 +755,19 @@ def check_duplicate_numbers() -> None:
 
 
 def check_repo_layout() -> None:
+    skip = (".git/", ".local/", "node_modules/", f"{BASE_REL}.local/")
     for path in ROOT.rglob("*"):
-        rel = str(path.relative_to(ROOT))
-        if rel.startswith((".git/", ".local/", "node_modules/")) or not path.is_file():
+        rel = str(path.relative_to(ROOT)).replace("\\", "/")
+        if rel.startswith(skip) or not path.is_file():
             continue
+        top = rel_to_base(path).split("/")[0]
         if path.name in NOISE or path.name.startswith("._"):
             err(path, "OS が作る不要ファイル。削除する")
         if path.suffix.lower() in RAW_EXT:
-            err(path, "生データ・画像はリポジトリに置かない（.local/{プロダクト}/ へ）")
-        if path.name.lower() in {"index.md"} and rel.split("/")[0] in {"analyses", "voices", "simulations"}:
-            err(path, "索引ファイルを作らない（一覧はディレクトリ、未決は products/ が正）")
-        if path.name == "README.md" and rel.split("/")[0] in {"analyses", "voices", "simulations"}:
+            err(path, f"生データ・画像はリポジトリに置かない（{BASE_REL}.local/{{プロダクト}}/ へ）")
+        if path.name.lower() in {"index.md"} and top in IMMUTABLE_DIRS:
+            err(path, f"索引ファイルを作らない（一覧はディレクトリ、未決は {BASE_REL}products/ が正）")
+        if path.name == "README.md" and top in IMMUTABLE_DIRS:
             err(path, "索引・説明ファイルを作らない（規約は CLAUDE.md と README.md に集約）")
 
 
@@ -725,7 +775,7 @@ def check_repo_layout() -> None:
 
 def validate(paths: list[Path]) -> None:
     for path in paths:
-        rel = str(path.relative_to(ROOT))
+        rel = rel_to_base(path)
         if rel.startswith("analyses/") and path.suffix == ".md":
             check_note(path)
         elif rel.startswith("voices/") and path.suffix == ".md":
@@ -743,13 +793,14 @@ def main() -> int:
         files = [p for p in args if p.exists() and p.is_file() and p.is_relative_to(ROOT)]
         validate(files)
         check_ledger([p for p in files
-                      if str(p.relative_to(ROOT)).startswith(IMMUTABLE_DIRS)],
+                      if p.is_relative_to(BASE)
+                      and rel_to_base(p).startswith(IMMUTABLE_DIRS)],
                      accept, full=False)
     else:
         targets = []
         dirs = ["analyses", "voices", "simulations", PRODUCTS_REL]
         for d in dirs:
-            targets += sorted((ROOT / d).rglob("*.md")) if (ROOT / d).exists() else []
+            targets += sorted((BASE / d).rglob("*.md")) if (BASE / d).exists() else []
         validate(targets)
         check_framework_leakage()
         check_repo_layout()

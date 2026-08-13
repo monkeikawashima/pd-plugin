@@ -8,7 +8,7 @@
 #
 # plugin 本体とプロジェクトは別物なので、一時コピーに両方を作って検証する。
 #   $WORK/plugin  配布物の複製（framework / hooks / scripts）
-#   $WORK/proj    pd を使うプロジェクト（products / analyses / 台帳 / CI）
+#   $WORK/proj    pd を使うプロジェクト（pd/products / pd/analyses / 台帳 / CI）
 # 実在のプロダクトには依存しない（検証用の testprod を作る）。
 
 set -e
@@ -20,6 +20,7 @@ cp -R "$ROOT" "$WORK/plugin"
 rm -rf "$WORK/plugin/.git"
 PLUGIN="$WORK/plugin"
 PROJ="$WORK/proj"
+PD="$PROJ/pd"          # 分析データの根。v1.4.0 からプロジェクト直下ではなくここ
 VALIDATE="$PLUGIN/scripts/validate.py"
 
 fail=0
@@ -47,7 +48,7 @@ prune() { PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" --accept >/dev/null 2>&1 ||
 
 # ------------------------------------------------------------ プロジェクトを作る
 
-mkdir -p "$PROJ/products" "$PROJ/analyses/testprod/2026" "$PROJ/pd" \
+mkdir -p "$PD/products" "$PD/analyses/testprod/2026" "$PROJ/pd" \
          "$PROJ/.github/workflows"
 printf '{}\n' > "$PROJ/pd/ledger.json"
 
@@ -68,7 +69,7 @@ jobs:
       - run: python3 .pd-plugin/scripts/validate.py
 EOF
 
-cat > "$PROJ/products/testprod.md" <<'EOF'
+cat > "$PD/products/testprod.md" <<'EOF'
 # プロダクトコンテキスト（検証用）
 
 ## KPI
@@ -99,7 +100,7 @@ cat > "$PROJ/products/testprod.md" <<'EOF'
 EOF
 
 write_ok_note() {   # $1 = ファイル名 / $2 = 日付
-cat > "$PROJ/analyses/testprod/2026/$1" <<EOF
+cat > "$PD/analyses/testprod/2026/$1" <<EOF
 ---
 product:   testprod
 date:      $2
@@ -128,11 +129,11 @@ echo ""
 
 # ---------------------------------------------------------------- 形式
 
-printf '# x\n' > "$PROJ/analyses/testprod/wrong-name.md"
+printf '# x\n' > "$PD/analyses/testprod/wrong-name.md"
 expect "命名規則の違反" "命名規則に合わない"
-rm "$PROJ/analyses/testprod/wrong-name.md"
+rm "$PD/analyses/testprod/wrong-name.md"
 
-cat > "$PROJ/analyses/testprod/2026/20260902-01-t.md" <<'EOF'
+cat > "$PD/analyses/testprod/2026/20260902-01-t.md" <<'EOF'
 ---
 product: testprod
 date: 2026-09-02
@@ -144,27 +145,27 @@ EOF
 expect "frontmatter の欠落" "frontmatter に author が無い"
 expect "凡例ブロックの欠落" "凡例ブロックが無い"
 expect "見出しの言い換え漏れ" "見出しに日本語の言い換えが無い"
-rm "$PROJ/analyses/testprod/2026/20260902-01-t.md"
+rm "$PD/analyses/testprod/2026/20260902-01-t.md"
 prune
 
-cp "$PROJ/analyses/testprod/2026/20260901-01-base.md" \
-   "$PROJ/analyses/testprod/2026/20260901-01-dup.md"
+cp "$PD/analyses/testprod/2026/20260901-01-base.md" \
+   "$PD/analyses/testprod/2026/20260901-01-dup.md"
 expect "同日連番の重複" "連番 01 が重複している"
-rm "$PROJ/analyses/testprod/2026/20260901-01-dup.md"
+rm "$PD/analyses/testprod/2026/20260901-01-dup.md"
 prune
 
 # Context の無いプロダクト
-mkdir -p "$PROJ/analyses/nocontext/2026"
+mkdir -p "$PD/analyses/nocontext/2026"
 printf -- '---\nproduct: nocontext\n---\n# x\n' \
-    > "$PROJ/analyses/nocontext/2026/20260901-01-t.md"
+    > "$PD/analyses/nocontext/2026/20260901-01-t.md"
 expect "Context の無いプロダクト" "products/nocontext.md が存在しない"
-rm -r "$PROJ/analyses/nocontext"
+rm -r "$PD/analyses/nocontext"
 prune
 
 # ---------------------------------------------------------------- 中身
 
 new_note() {   # $1 = 本文
-cat > "$PROJ/analyses/testprod/2026/20260903-01-t.md" <<EOF
+cat > "$PD/analyses/testprod/2026/20260903-01-t.md" <<EOF
 ---
 product:   testprod
 date:      2026-09-03
@@ -219,12 +220,12 @@ new_note '## Evidence（根拠）
 新規/既存 で見た（`Fact`）。simulations/testprod/2026/20260901-x.md を参照した。'
 expect "予測データの参照" "予測データ（simulations/）を分析で参照している"
 
-rm "$PROJ/analyses/testprod/2026/20260903-01-t.md"
+rm "$PD/analyses/testprod/2026/20260903-01-t.md"
 prune
 
 # 適用開始日より前の Note には新しい規約を適用しない
 write_ok_note "20260801-01-old.md" "2026-08-01"
-cat >> "$PROJ/analyses/testprod/2026/20260801-01-old.md" <<'EOF'
+cat >> "$PD/analyses/testprod/2026/20260801-01-old.md" <<'EOF'
 
 ## Decision（判断）
 Improve。
@@ -234,13 +235,13 @@ if PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" 2>&1 | grep -q "「反証」の節
 else
     printf '  ✓ 適用開始日より前の Note は新規約の対象外\n'; pass=$((pass + 1))
 fi
-rm "$PROJ/analyses/testprod/2026/20260801-01-old.md"
+rm "$PD/analyses/testprod/2026/20260801-01-old.md"
 prune
 
 # ---------------------------------------------------------------- Voice
 
-mkdir -p "$PROJ/voices/testprod/2026"
-cat > "$PROJ/voices/testprod/2026/20260901-interview.md" <<'EOF'
+mkdir -p "$PD/voices/testprod/2026"
+cat > "$PD/voices/testprod/2026/20260901-interview.md" <<'EOF'
 ---
 product: testprod
 date: 2026-09-01
@@ -254,7 +255,7 @@ expect "敬称つき実名の検出" "実名らしい呼称"
 expect "メールアドレスの検出" "メールアドレス"
 expect "発話者 ID 形式の欠落" "ID 形式で書かれていない"
 
-cat > "$PROJ/voices/testprod/2026/20260901-interview.md" <<'EOF'
+cat > "$PD/voices/testprod/2026/20260901-interview.md" <<'EOF'
 ---
 product: testprod
 date: 2026-09-01
@@ -265,7 +266,7 @@ context: 商談
 EOF
 expect "敬称なし実名（姓）の検出" "実名らしい語"
 
-cat > "$PROJ/voices/testprod/2026/20260901-interview.md" <<'EOF'
+cat > "$PD/voices/testprod/2026/20260901-interview.md" <<'EOF'
 ---
 product: testprod
 date: 2026-09-01
@@ -277,7 +278,7 @@ context: 商談
 EOF
 expect "発話行の形式違反" "発話行は"
 
-cat > "$PROJ/voices/testprod/2026/20260901-random.md" <<'EOF'
+cat > "$PD/voices/testprod/2026/20260901-random.md" <<'EOF'
 ---
 product: testprod
 date: 2026-09-01
@@ -286,26 +287,26 @@ context: 雑談
 ---
 利用者A-1: 「速い」
 EOF
-rm "$PROJ/voices/testprod/2026/20260901-interview.md"
+rm "$PD/voices/testprod/2026/20260901-interview.md"
 expect "取得経路が許可外" "許可されていない"
-rm -r "$PROJ/voices/testprod"
+rm -r "$PD/voices/testprod"
 prune
 
 # ---------------------------------------------------------------- 予測データ
 
-mkdir -p "$PROJ/simulations/testprod/2026"
+mkdir -p "$PD/simulations/testprod/2026"
 printf -- '---\nproduct: testprod\n---\n# 予測\n' \
-    > "$PROJ/simulations/testprod/2026/20260901-test.md"
+    > "$PD/simulations/testprod/2026/20260901-test.md"
 expect "synthetic フラグの欠落" "synthetic: true が無い"
 expect "警告ブロックの欠落" "警告ブロックが無い"
-rm -r "$PROJ/simulations/testprod"
+rm -r "$PD/simulations/testprod"
 prune
 
 # ---------------------------------------------------------------- Context
 
-printf '\n出典: voices/testprod/2026/20260901-interview.md\n' >> "$PROJ/products/testprod.md"
+printf '\n出典: voices/testprod/2026/20260901-interview.md\n' >> "$PD/products/testprod.md"
 expect "Voice のファイル名の列挙" "ファイル名を列挙している"
-python3 - "$PROJ/products/testprod.md" <<'PY'
+python3 - "$PD/products/testprod.md" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1])
 s = p.read_text(encoding='utf-8')
@@ -315,10 +316,10 @@ PY
 
 # ---------------------------------------------------------------- リポジトリ
 
-touch "$PROJ/analyses/testprod/2026/export.csv" "$PROJ/analyses/testprod/index.md"
+touch "$PD/analyses/testprod/2026/export.csv" "$PD/analyses/testprod/index.md"
 expect "生データの混入" "生データ・画像はリポジトリに置かない"
 expect "索引ファイルの作成" "索引ファイルを作らない"
-rm "$PROJ/analyses/testprod/2026/export.csv" "$PROJ/analyses/testprod/index.md"
+rm "$PD/analyses/testprod/2026/export.csv" "$PD/analyses/testprod/index.md"
 
 touch "$PROJ/.DS_Store"
 expect "OS のノイズファイル" "OS が作る不要ファイル"
@@ -331,7 +332,7 @@ cp "$ROOT/skills/pd/framework/kpi.md" "$PLUGIN/skills/pd/framework/kpi.md"
 # ---------------------------------------------------------------- 履歴（台帳）
 
 # 書いた当日の仕上げは通る（まだ「過去の記録」ではない）
-python3 - "$PROJ/analyses/testprod/2026/20260901-01-base.md" <<'PY'
+python3 - "$PD/analyses/testprod/2026/20260901-01-base.md" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1])
 p.write_text(p.read_text(encoding='utf-8') + '\n当日の仕上げ\n', encoding='utf-8')
@@ -351,7 +352,7 @@ d = json.loads(led.read_text(encoding='utf-8'))
 for k in d:
     d[k]['seen'] = '2026-01-01'
 led.write_text(json.dumps(d, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
-p = proj / 'analyses/testprod/2026/20260901-01-base.md'
+p = proj / 'pd/analyses/testprod/2026/20260901-01-base.md'
 p.write_text(p.read_text(encoding='utf-8') + '\n後日の書き換え\n', encoding='utf-8')
 PY
 expect "後日の書き換え" "過去の記録が変更されている"
@@ -362,9 +363,9 @@ else
     printf '  ✗ 承認ログへの記録 — 残らなかった\n'; fail=$((fail + 1))
 fi
 
-mv "$PROJ/analyses/testprod/2026/20260901-01-base.md" "$WORK/moved.md"
+mv "$PD/analyses/testprod/2026/20260901-01-base.md" "$WORK/moved.md"
 expect "記録の削除・リネーム" "台帳にあるが存在しない"
-mv "$WORK/moved.md" "$PROJ/analyses/testprod/2026/20260901-01-base.md"
+mv "$WORK/moved.md" "$PD/analyses/testprod/2026/20260901-01-base.md"
 prune
 
 # ------------------------------------------------------- 仕組みの無効化（プロジェクト側）
@@ -501,7 +502,7 @@ hook_case() {   # $1 = ラベル / $2 = event / $3 = 入力JSON / $4 = 期待（
     fi
 }
 
-BADFILE="$PROJ/analyses/testprod/2026/bad-name.md"
+BADFILE="$PD/analyses/testprod/2026/bad-name.md"
 printf '中身\n' > "$BADFILE"
 hook_case "違反ファイルの編集を止める" post-tool-use \
           "{\"tool_input\":{\"file_path\":\"$BADFILE\"}}" "block"
@@ -549,6 +550,36 @@ else
     PD_PROJECT_DIR="$PLUGIN" python3 "$VALIDATE" 2>&1 | sed 's/^/      /'
     fail=$((fail + 1))
 fi
+
+# ------------------------------------------------------- 旧レイアウト（root 直下）
+#
+# v1.4.0 で分析データを `pd/` 配下に畳んだ。既に root 直下で運用している
+# プロジェクトを壊さないこと。台帳のキーは根からの相対パスなので、
+# **移動しても承認なしで通る**ところまで確かめる（ここが壊れると、更新した
+# 途端に既存プロジェクトが全ファイル「台帳にあるが存在しない」で落ちる）。
+
+for d in products analyses voices simulations; do
+    [ -d "$PD/$d" ] && mv "$PD/$d" "$PROJ/$d" || true
+done
+
+if PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" >/dev/null 2>&1; then
+    printf '  ✓ 旧レイアウト（root 直下）でも通る\n'; pass=$((pass + 1))
+else
+    printf '  ✗ 旧レイアウトで違反を出している（既存プロジェクトが壊れる）\n'
+    PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" 2>&1 | sed 's/^/      /'
+    fail=$((fail + 1))
+fi
+
+OLDBAD="$PROJ/analyses/testprod/2026/bad-name.md"
+printf '中身\n' > "$OLDBAD"
+hook_case "旧レイアウトでも hook が止める" post-tool-use \
+          "{\"tool_input\":{\"file_path\":\"$OLDBAD\"}}" "block"
+rm -f "$OLDBAD"
+
+for d in products analyses voices simulations; do
+    [ -d "$PROJ/$d" ] && mv "$PROJ/$d" "$PD/$d" || true
+done
+prune
 
 echo ""
 if [ "$fail" -gt 0 ]; then

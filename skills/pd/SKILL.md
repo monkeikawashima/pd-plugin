@@ -16,7 +16,7 @@ description: >
 ```
 SKILL.md          実行方法・オーケストレーション（このファイル）
     ↓
-products/         対象プロダクトの Context
+pd/products/      対象プロダクトの Context
     ↓
 framework/        共通の思考方法（必要なものだけ）
     ↓
@@ -32,11 +32,15 @@ plugin 側（全プロジェクト共通。/plugin update で上書きされる�
   SKILL.md / framework/ / products/_template.md
 
 プロジェクト側（そのプロジェクトのデータ。書き換えるのはこちら）
-  products/{product-name}.md      Context（現在値）
-  analyses/ voices/ simulations/ .local/
+  pd/products/{product-name}.md   Context（現在値）
+  pd/analyses/ pd/voices/ pd/simulations/ pd/.local/
 ```
 
-以降このファイルで `products/` `analyses/` `voices/` `simulations/` と書いたものは、**すべてプロジェクト側**を指す。plugin 配下に分析データを書き込まない（更新時に消える）。
+以降このファイルで `products/` `analyses/` `voices/` `simulations/` `.local/` と書いたものは、**すべてプロジェクト側の `pd/` 配下**を指す。plugin 配下に分析データを書き込まない（更新時に消える）。
+
+**`pd/` の1段は省略しない。** pd が作るものを1箇所に集めているのは、やめるときに「どれが pd のものか」が分かるようにするため。
+
+**例外**: root 直下に `products/` `analyses/` があるプロジェクトは v1.4.0 より前のレイアウト。**移動せず、そのレイアウトに合わせて書く**（検証器も両方を読む）。
 
 プロジェクト側の置き場所がまだ無い場合は `/pd:pd-init` で作る。
 
@@ -219,7 +223,7 @@ Evidence が足りないとき、「分からない」で終わらせない。�
 本格的な分析を行った場合、結果を Discovery Note として保存する。
 
 ```
-analyses/{product-name}/{YYYY}/YYYYMMDD-NN-{slug}.md
+pd/analyses/{product-name}/{YYYY}/YYYYMMDD-NN-{slug}.md
 ```
 
 - `{product-name}` は `products/{product-name}.md` と同じ名前
@@ -294,7 +298,7 @@ Context に変化があった場合は `products/{product-name}.md` を更新す
 インタビュー・商談・サポート等で得た発話は、分析結果とは別に保存する。
 
 ```
-voices/{product-name}/{YYYY}/YYYYMMDD-{source}.md
+pd/voices/{product-name}/{YYYY}/YYYYMMDD-{source}.md
 ```
 
 - `{source}` は取得経路を1語で（`interview` / `sales` / `support` / `onboarding` / `observation` など）
@@ -346,7 +350,7 @@ Context 側（`products/{product-name}.md` の Qualitative）にファイル名�
      リポジトリに複製を作らず、必要になったらクエリで取り直す。
      クエリを Note に残すのは、この再取得を可能にするため。
 
-2. 一時的に手元へ置く必要がある場合 — .local/{product-name}/
+2. 一時的に手元へ置く必要がある場合 — pd/.local/{product-name}/
      エクスポートしたファイルを読ませる、加工する、突き合わせる等。
      プロダクト名のフォルダに、日付プレフィックスのファイル名で置く。
      gitignore 済みでコミットされない。
@@ -379,7 +383,7 @@ Context 側（`products/{product-name}.md` の Qualitative）にファイル名�
 インタビュー前に想定回答を書き出して設計を検証する場合、実データと**別の木**に置く。
 
 ```
-simulations/{product-name}/{YYYY}/YYYYMMDD-{slug}.md
+pd/simulations/{product-name}/{YYYY}/YYYYMMDD-{slug}.md
 ```
 
 - frontmatter に `synthetic: true`、冒頭に警告ブロックを置く

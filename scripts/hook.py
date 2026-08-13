@@ -29,8 +29,10 @@ VALIDATE = PLUGIN_ROOT / "scripts" / "validate.py"
 # 検証器が走ると毎回違反を出すため、この目印が無ければ何もしない。
 MARKER = Path("pd") / "ledger.json"
 
-# 検証の対象になるディレクトリ（プロジェクト側）
+# 検証の対象になるディレクトリ（プロジェクト側）。v1.4.0 から `pd/` 配下に
+# 畳んだが、root 直下で運用している既存プロジェクトもそのまま拾う。
 WATCHED = ("analyses", "voices", "simulations", "products")
+BASE_DIR = "pd"
 
 # 変更したら pd-skill-blueprint.md の同期が要るファイル（plugin 側）
 SKILL_PARTS = (
@@ -100,7 +102,10 @@ def post_tool_use(event: dict) -> None:
         rel = Path(raw).resolve().relative_to(root)
     except ValueError:
         return
-    if not rel.parts or rel.parts[0] not in WATCHED:
+    parts = rel.parts
+    if parts and parts[0] == BASE_DIR:
+        parts = parts[1:]        # pd/analyses/… → analyses/…
+    if not parts or parts[0] not in WATCHED:
         return
 
     code, out = run_validate(raw)

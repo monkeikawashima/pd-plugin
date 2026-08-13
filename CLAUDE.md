@@ -6,7 +6,7 @@ Product Discovery Skill（`/pd:pd`）の**配布物**。
 .claude-plugin/   marketplace / plugin 定義
 skills/pd/        SKILL.md / framework/ / products/_template.md
 hooks/            PostToolUse / Stop / SessionStart
-commands/         /pd:pd-init  /pd:pd-validate
+commands/         /pd:pd-init  /pd:pd-validate  /pd:pd-uninstall
 scripts/          validate.py（唯一の判定者）/ selftest.sh
 pd-skill-blueprint.md   別プロジェクトで Skill を再構築するための指示書
 README.md         人が読む入口
@@ -60,6 +60,20 @@ typo 修正や表現の微調整だけなら更新不要。`hooks/hooks.json` �
 `framework/` を変更したくなった場合、それは「共通フレームワークに固有事情が漏れている」か「`_template.md` の Schema が足りない」かのどちらか。まず `_template.md` 側を見直す。
 
 **この判定は利用プロジェクト側でしか完全には働かない。** 禁止語は `products/*.md` のファイル名から自動生成しており、plugin 単体には products が無いため照合対象が空になる。plugin だけを見て「通った」と判断しない。
+
+---
+
+## 2.5 プロジェクト側に置くものは `pd/` から出さない
+
+利用プロジェクトに作るものは `pd/` 配下に収める（v1.4.0〜）。**やめるときに「どれが pd のものか」を判別できるようにするため。** 例外は `.github/workflows/validate.yml` と `CLAUDE.md` の2つだけ（置き場所が決まっているため動かせない）。
+
+置き場所を増やすときは `/pd:pd-uninstall` の対象一覧にも足す。**片付けられないものを作らない。**
+
+### 旧レイアウトを読めなくしない
+
+v1.4.0 より前は root 直下だった。`validate.py` の `BASE`（`_base_dir()`）が両方を読む。**この分岐を消すと、既存プロジェクトが更新した瞬間に全ファイル「台帳にあるが存在しない」で落ちる。**
+
+台帳のキーは `BASE` からの相対パス。だから `pd/` へ移しても承認なしで通る。`ROOT` 相対に戻さないこと。`selftest.sh` の「旧レイアウトでも通る」がこれを見ている。
 
 ---
 
