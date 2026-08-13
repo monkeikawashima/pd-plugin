@@ -1,0 +1,34 @@
+---
+description: pd plugin を最新版に更新する（配布元の取り直しと更新をまとめて行う）
+allowed-tools: Bash(claude plugin *)
+---
+
+# pd-update
+
+**配布元の一覧を取り直してから更新する。** この順序でないと更新されない。
+
+`claude plugin update` は**手元にあるカタログしか見ない**。取り直さずに実行すると、新しい版が出ていても「already at the latest version」と言われる。手元のカタログが古い版を指していれば、**古い版へ戻してしまう**（実測: カタログが v1.0.0 のとき、v1.0.1 から v1.0.0 に「更新」された）。
+
+```bash
+claude plugin marketplace update pd-plugin && claude plugin update pd@pd-plugin
+```
+
+## 実行後にやること
+
+1. 出力の版番号を利用者に伝える（`updated from X to Y` / `already at the latest version`）
+2. 版が上がっていたら、**変更履歴を必ず案内する**
+   https://github.com/monkeikawashima/pd-plugin/blob/main/CHANGELOG.md
+
+   **判定のルールが変わった版では、昨日まで通っていたファイルが落ちる。** 更新は無条件に良いことではない。何が変わったかを読む機会を必ず渡す。
+3. 今のセッションに反映するため `/reload-plugins` を実行するよう伝える（実行するのは利用者）
+4. **CI を使っているプロジェクトでは、`pd/`… ではなく `.github/workflows/validate.yml` の `ref` も同じ版に上げる**よう伝える。忘れると手元と CI で判定が食い違う
+
+## うまくいかないとき
+
+| 症状 | 原因 | 対応 |
+|---|---|---|
+| `claude: command not found` | CLI の無い環境（デスクトップアプリなど） | `/plugin marketplace update pd-plugin` → `/plugin update pd@pd-plugin` を順に実行してもらう |
+| 版が変わらない | 配布元にまだ新しいタグが無い | 変更履歴を見て、出ている版を確認する |
+| 更新後も古い挙動 | セッションに未反映 | `/reload-plugins`（警告が出たら `/reload-plugins --force`） |
+
+分析データ（`pd/` 配下）は更新で消えない。入れ替わるのは plugin 側だけ。

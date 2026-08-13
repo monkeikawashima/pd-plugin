@@ -759,8 +759,10 @@ PLUGIN_FILES = [
     "commands/init.md",
     "commands/validate.md",
     "commands/uninstall.md",
+    "commands/update.md",
     "scripts/validate.py",
     "scripts/hook.py",
+    "scripts/update_check.py",
     "scripts/selftest.sh",
     "scripts/release.sh",
     "skills/analyze/SKILL.md",
@@ -877,7 +879,7 @@ def check_plugin_is_generic() -> None:
 # **直前が語・`/`・`:` のときは対象外にする**（`scripts/validate.py` や
 # `pd/validations/` を誤検知させない）。旧名も残骸として拾う。
 BARE_COMMAND = re.compile(
-    r"(?<![\w:/])/(analyze|init|validate|uninstall"
+    r"(?<![\w:/])/(analyze|init|validate|uninstall|update"
     r"|pd|pd-init|pd-validate|pd-uninstall)(?![\w:\-/])"
 )
 
@@ -887,7 +889,8 @@ RENAMED = {"pd": "analyze", "pd-init": "init",
 
 DOCS = ["README.md", "CLAUDE.md", "pd-skill-blueprint.md",
         "commands/init.md", "commands/validate.md",
-        "commands/uninstall.md", "skills/analyze/SKILL.md"]
+        "commands/uninstall.md", "commands/update.md",
+        "skills/analyze/SKILL.md"]
 
 
 def check_command_names() -> None:
@@ -929,6 +932,10 @@ def check_hook_entrypoint() -> None:
                    "（pd を使わないプロジェクトでも動いてしまう）")
     if "pd-skill-blueprint.md" not in body:
         err(entry, "blueprint / README 同期の促しが消えている")
+    # 更新は放っておくと届かない（サードパーティの配布元は既定で自動更新されない）。
+    # 起動時に知らせないと、手元だけ古いまま CI と判定が食い違う。
+    if "update_check" not in body:
+        err(entry, "起動時の更新の案内が消えている（利用者に新しい版が届かない）")
 
 
 def check_version_consistency() -> None:

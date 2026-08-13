@@ -164,12 +164,16 @@ pd は業種の言葉を持ちません。「利用者」を何と呼ぶかは�
 ## 更新する
 
 ```
-/plugin update pd@pd-plugin
+/pd:update
 ```
 
-反映されないときは `/plugin marketplace update pd-plugin`（配布元の一覧を取り直す）→ `/reload-plugins`（今のセッションに反映する）。
+これ1つで済みます。終わったら `/reload-plugins`（今のセッションに反映する）。
 
-**更新は放っておくと届きません。** Claude Code は公式以外の配布元を既定で自動更新しないためです。常に最新でよければ `/plugin` → Marketplaces → pd-plugin → **Enable auto-update**。**チームで使う場合は手動のままを勧めます**（チェックのルールが勝手に変わると、昨日まで通っていたファイルが今日落ちるため）。
+**新しい版が出ると、Claude Code の起動時にお知らせが出ます。** 版の番号・変更内容・変更履歴へのリンクが並ぶので、`/pd:update` と打つだけです（お知らせが出るのは `/pd:init` 済みのプロジェクトだけです。ネットにつながらない環境では出ませんが、作業は妨げません）。
+
+⚠️ **`/plugin update pd@pd-plugin` だけでは更新されません。** これは手元にある配布元の一覧しか見ないので、新しい版が出ていても気づけません。**一覧が古いままだと、古い版へ戻すこともあります。** `/pd:update` は「一覧の取り直し → 更新」をこの順で実行します。手で打つ場合も同じ順序で `/plugin marketplace update pd-plugin` → `/plugin update pd@pd-plugin`。
+
+**更新は放っておくと届きません。** Claude Code は公式以外の配布元を既定で自動更新しないためです。常に最新でよければ `/plugin` → Marketplaces → pd-plugin → **Enable auto-update**（打つコマンドもゼロになり、更新があったときだけ `/reload-plugins` を促されます）。**チームで使う場合は手動のままを勧めます**（チェックのルールが勝手に変わると、昨日まで通っていたファイルが今日落ちるため）。
 
 **分析データは消えません。** 入れ替わるのは plugin 側だけです。何が変わるかは [CHANGELOG.md](CHANGELOG.md) にあります。
 

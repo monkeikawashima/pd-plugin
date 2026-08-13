@@ -124,10 +124,40 @@ def whole_project(_: dict) -> None:
         emit({"systemMessage": "⚠ 規約違反が残っています\n" + out})
 
 
+def update_notice() -> str:
+    """新しい版が出ていれば、その案内文。無ければ空。
+
+    更新は放っておくと届かない（サードパーティの配布元は既定で自動更新されない）。
+    起動時に知らせないと、手元だけ古いまま CI と判定が食い違う事故になる。
+    """
+    sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
+    try:
+        import update_check
+        return update_check.notice() or ""
+    except Exception:  # noqa: BLE001 — 案内が出ないだけ。作業は止めない
+        return ""
+
+
+def session_start(_: dict) -> None:
+    """起動時: 残っている違反と、配布元の新しい版をまとめて1度だけ出す。"""
+    root = project_dir()
+    if not is_pd_project(root):
+        return
+    blocks = []
+    code, out = run_validate()
+    if code != 0:
+        blocks.append("⚠ 規約違反が残っています\n" + out)
+    notice = update_notice()
+    if notice:
+        blocks.append(notice)
+    if blocks:
+        emit({"systemMessage": "\n\n".join(blocks)})
+
+
 EVENTS = {
     "post-tool-use": post_tool_use,
     "stop": whole_project,
-    "session-start": whole_project,
+    "session-start": session_start,
 }
 
 

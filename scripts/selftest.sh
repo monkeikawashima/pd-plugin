@@ -594,9 +594,17 @@ sed_replace "$PLUGIN/scripts/hook.py" "pd-skill-blueprint.md" "somewhere-else.md
 expect_plugin "blueprint 同期の促しの消失" "同期の促しが消えている"
 cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
 
+sed_replace "$PLUGIN/scripts/hook.py" "update_check" "nothing_at_all"
+expect_plugin "起動時の更新の案内の消失" "更新の案内が消えている"
+cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
+
 mv "$PLUGIN/scripts/hook.py" "$WORK/hook.py"
 expect_plugin "hook の入口の削除" "scripts/hook.py: 無い"
 mv "$WORK/hook.py" "$PLUGIN/scripts/hook.py"
+
+mv "$PLUGIN/scripts/update_check.py" "$WORK/update_check.py"
+expect_plugin "更新チェックの削除" "scripts/update_check.py: 無い"
+mv "$WORK/update_check.py" "$PLUGIN/scripts/update_check.py"
 
 # Windows には sh も jq も無い。hooks.json にシェル構文が戻ると全滅する。
 sed_replace "$PLUGIN/hooks/hooks.json" \
@@ -608,6 +616,12 @@ cp "$ROOT/hooks/hooks.json" "$PLUGIN/hooks/hooks.json"
 mv "$PLUGIN/commands/init.md" "$WORK/pd-init.md"
 expect_plugin "配布物（コマンド）の欠落" "commands/init.md: 無い"
 mv "$WORK/pd-init.md" "$PLUGIN/commands/init.md"
+
+# 更新の手順を1つにまとめたコマンド。消えると利用者は2つの順序を覚える羽目になり、
+# 順序を間違えると古い版へ戻る。
+mv "$PLUGIN/commands/update.md" "$WORK/pd-update.md"
+expect_plugin "更新コマンドの欠落" "commands/update.md: 無い"
+mv "$WORK/pd-update.md" "$PLUGIN/commands/update.md"
 
 mv "$PLUGIN/.claude-plugin/marketplace.json" "$WORK/marketplace.json"
 expect_plugin "marketplace 定義の欠落" "marketplace.json: 無い"
