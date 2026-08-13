@@ -1,0 +1,82 @@
+# pd-plugin
+
+Product Discovery Skill（`/pd`）の**配布物**。
+
+```
+.claude-plugin/   marketplace / plugin 定義
+skills/pd/        SKILL.md / framework/ / products/_template.md
+hooks/            PostToolUse / Stop / SessionStart
+commands/         /pd-init  /pd-validate
+scripts/          validate.py（唯一の判定者）/ selftest.sh
+pd-skill-blueprint.md   別プロジェクトで Skill を再構築するための指示書
+README.md         人が読む入口
+```
+
+**分析データはここに置かない。** Note・Voice・Context は利用プロジェクト側にあり、`/plugin update` で上書きされるこの場所に置くと消える。
+
+---
+
+## 0. 変更したら必ず両方を実行する
+
+```bash
+python3 scripts/validate.py     # 配布物が揃っているか
+sh scripts/selftest.sh          # 検証器が本当に違反を検出するか
+```
+
+**常に成功する検証器は、無いのと同じ。** 判定を追加したら `selftest.sh` にも壊れた例を1つ追加する。緩める場合は理由を blueprint §13 に残す。
+
+`validate.py` は配布物の欠落も見ている（`plugin.json` / `marketplace.json` / `hooks.json` / 各コマンド / CI）。仕組みごと外される穴を塞ぐため。
+
+---
+
+## 1. Skill を変更したら blueprint も更新する（必須・確認不要）
+
+`skills/pd/` 配下（`SKILL.md` / `framework/*.md` / `products/_template.md`）を変更したら、**同じ作業内で** `pd-skill-blueprint.md` の該当箇所も更新する。ユーザーへの確認を取らずに行う。
+
+| Skill 側の変更 | blueprint の更新先 |
+|---|---|
+| `SKILL.md` | §7 |
+| `framework/discovery.md` | §8 |
+| `framework/kpi.md` | §9 |
+| `framework/experiment.md` | §10 |
+| `products/_template.md` | §11 |
+| 配置が分かれうる論点を決めた | §13 の論点表に決定と理由を追記 |
+| 検証可能な能力が増えた | §17 Acceptance Criteria |
+| ディレクトリ構成が変わった | §4 |
+| 配布・hook・CI の仕組み | §19 |
+
+**なぜ:** blueprint は Skill を別プロジェクトで再構築するための唯一の指示書。Skill 本体だけ更新すると、再構築した Skill から追記分が消える。
+
+typo 修正や表現の微調整だけなら更新不要。`hooks/hooks.json` の PostToolUse hook が変更を検知して同期を促すが、**判断は作業者に残す**（hook はブロックしない）。
+
+---
+
+## 2. `framework/` にプロダクト固有情報を書かない
+
+`framework/` は共通の思考方法のみ。特定の KPI 名・プロダクト名・業界固有の指標を書き込まない。固有情報は利用プロジェクトの `products/{product-name}.md` 側で扱う。
+
+例外は `kpi.md` 冒頭の「これらを書かない」という禁止例の列挙のみ。
+
+`framework/` を変更したくなった場合、それは「共通フレームワークに固有事情が漏れている」か「`_template.md` の Schema が足りない」かのどちらか。まず `_template.md` 側を見直す。
+
+**この判定は利用プロジェクト側でしか完全には働かない。** 禁止語は `products/*.md` のファイル名から自動生成しており、plugin 単体には products が無いため照合対象が空になる。plugin だけを見て「通った」と判断しない。
+
+---
+
+## 3. hook は無関係なプロジェクトで動かさない
+
+plugin の hook は、有効化した**全プロジェクト**で走る。pd と無関係なリポジトリで検証器が動くと、毎ターン違反通知が出て使い物にならない。
+
+目印（`$CLAUDE_PROJECT_DIR/pd/ledger.json`）が無ければ即 `exit 0` すること。この判定は `validate.py` が確認しており、消すと違反になる。
+
+---
+
+## 4. 版を上げるときの手順
+
+判定を追加・変更したら、次を**同じ作業内で**行う。
+
+1. `.claude-plugin/plugin.json` と `marketplace.json` の `version` を上げる
+2. `git tag v{version}` を打って push する
+3. 利用プロジェクトの `.github/workflows/validate.yml` の `ref` を上げる
+
+**3 を忘れると、手元（`/plugin update` 済み）と CI（旧タグ）で判定が食い違う。** 手元で通ったものが CI で落ちる、あるいはその逆が起きる。
