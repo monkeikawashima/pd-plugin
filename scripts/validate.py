@@ -463,21 +463,40 @@ def segment_declarations(text: str) -> list[tuple[str, str]]:
     散文の substring マッチと同じ抜け道が残る。
     """
     out: list[tuple[str, str]] = []
-    for line in text.split("\n"):
+    lines = text.split("\n")
+    header = ""
+    for i, line in enumerate(lines):
         s = line.strip()
-        if not s.startswith("|") or TABLE_SEPARATOR.match(line):
+        if not s.startswith("|"):
+            header = ""
+            continue
+        if TABLE_SEPARATOR.match(line):
             continue
         cells = [c.strip() for c in s.strip("|").split("|")]
         if len(cells) < 2:
             continue
+        # 見出し行（次の行が区切り）は宣言ではなく、その表の性格を決める
+        if i + 1 < len(lines) and TABLE_SEPARATOR.match(lines[i + 1]):
+            header = " ".join(cells)
+            continue
         rest = " ".join(cells[1:])
-        if _states_something(rest):
+        if _is_declaration_table(header) or _states_something(rest):
             out.append((cells[0], rest))
     return out
 
 
+def _is_declaration_table(header: str) -> bool:
+    """その表は Segment の宣言表か。**見出しで見る。**
+
+    行の中身の書き方（「分解済み」「74%」…）だけで判定すると、`取得済み` のように
+    定型語も数値も使わない正しい宣言が落ちる。**誤検知が出た時点で「validate を
+    通すための記述」が書かれ始める** ので、表の性格は見出しから読む。
+    """
+    return "Segment" in header or "セグメント" in header
+
+
 def _states_something(rest: str) -> bool:
-    """その行は「状態」を述べているか（分解した / 引けない / 実際の値がある）。"""
+    """宣言表の外でも、状態を述べていれば宣言と認める。"""
     return (any(u in rest for u in SEGMENT_UNKNOWN)
             or "分解" in rest
             or re.search(r"[0-9０-９]", rest) is not None)
@@ -1568,7 +1587,14 @@ def check_ci_ref(ci: Path, body: str) -> None:
     # **版として読めるのは semver のタグだけ。** `[\d.]+` で拾うと、commit SHA を
     # 指した `ref: 4762a00` が「v4762」という版として比較され、
     # 「手元より新しい」という意味の通らない警告が出ていた。
-    raw = [r.strip() for r in re.findall(r"ref:\s*(\S+)", body)]
+    # **コメント行は読まない。** `# 以前は ref: v1.0.0 だった` のような注記を
+    # 実際の指定と取り違えると、正しく上げてあるのに警告が出続ける。
+    raw = []
+    for line in body.split("\n"):
+        code = line.split("#", 1)[0]
+        m = re.search(r"ref:\s*(\S+)", code)
+        if m:
+            raw.append(m.group(1).strip())
     refs = [r.lstrip("v") for r in raw if re.fullmatch(r"v?\d+\.\d+\.\d+", r)]
     if not refs:
         # 版を固定していない = CI が既定ブランチや commit を追う。判定が予告なく

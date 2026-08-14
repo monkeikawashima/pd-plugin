@@ -291,6 +291,16 @@ new_note '## Evidence（根拠）
 | 利用頻度 | 使う回数 |'
 expect "状態の無い表の行は宣言と認めない" "「新規/既存」の宣言が無い"
 
+# 見出しが Segment の表なら、定型語も数値も無い書き方でも宣言と認める。
+# 「分解済み」「74%」しか認めないと、正しい宣言が落ちて作文を生む
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 |
+|---|---|---|
+| 新規/既存 | 取得済み | 既存のほうが継続しやすい傾向（`Fact`。出典: 集計） |
+| 利用頻度 | 取得済み | よく使う層ほど残る（`Fact`。出典: 集計） |'
+expect_no "宣言表なら定型語が無くても通る" "の宣言が無い"
+
 # 定義側。括弧の内側の `/` で切ると、照合語が壊れて原理的に通らなくなる
 sed_replace "$PD/products/testprod.md" \
   '必須 Segment: 新規/既存 ・ 利用頻度' \
@@ -1163,6 +1173,13 @@ sed_replace "$CI" "octocat/hello" "monkeikawashima/pd-plugin"
 # 忘れると手元と CI で違う判定器が動いたまま ✓ が出続けていた。
 sed_replace "$CI" "ref: v$PLUGIN_VERSION" "ref: v0.0.1"
 expect "CI が固定する plugin の版が古い" "CI が固定している plugin の版が古い"
+
+# コメント内の注記を実際の指定と取り違えない（正しく上げてあるのに警告が出続ける）
+sed_replace "$CI" "          ref: v0.0.1" "          # 以前は ref: v0.0.1 だった
+          ref: v$PLUGIN_VERSION"
+expect_no "コメント内の ref は読まない" "CI が固定している plugin の版"
+sed_replace "$CI" "          # 以前は ref: v0.0.1 だった
+          ref: v$PLUGIN_VERSION" "          ref: v0.0.1"
 sed_replace "$CI" "ref: v0.0.1" "ref: v9999.0.0"
 expect "CI が固定する plugin の版が手元より新しい" "手元より新しい"
 sed_replace "$CI" "ref: v9999.0.0" "ref: 4762a00"
