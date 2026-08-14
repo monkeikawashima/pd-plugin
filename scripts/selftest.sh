@@ -1117,6 +1117,12 @@ cp "$ROOT/.claude-plugin/marketplace.json" "$PLUGIN/.claude-plugin/marketplace.j
 expect_plugin "版の記載の食い違い" "version が plugin.json と違う"
 cp "$ROOT/.claude-plugin/plugin.json" "$PLUGIN/.claude-plugin/plugin.json"
 
+# 履歴だけ先に書いて配り忘れた。見た目は完成しているので気づけない。
+# /plugin update しても "already at the latest version" で止まり、誰にも届かない。
+printf '\n## [99.0.0] — 2099-01-01\n\n### 追加\n\n- 配り忘れた版\n' >> "$PLUGIN/CHANGELOG.md"
+expect_plugin "履歴を書いたのに配っていない" "書いたが配っていない"
+cp "$ROOT/CHANGELOG.md" "$PLUGIN/CHANGELOG.md"
+
 # ------------------------------------------------------- hook の挙動（形ではなく動き）
 
 # hooks.json に名前が載っていても、実際に止められなければ意味がない。
