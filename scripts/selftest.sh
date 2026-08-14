@@ -36,7 +36,12 @@ expect() {   # $1 = ラベル / $2 = 期待する検出メッセージ（部分�
 }
 
 # 違反が1件も出ないこと（正常系）
-expect_ok() {   # $1 = ラベル
+#
+# $2 以降は「どの判定の正しい書き方か」を示すタグ（例: check_personas）。
+# validate.py がこのタグを数え上げ、**正しい例の無い判定を違反にする**。
+# 実行時には使わない。壊れた例だけを増やすと、判定を締めたときに正しい文書を
+# 巻き込んだことに気づけない（v1.5.2 / v1.5.3 で連続して誤検知を出した）。
+expect_ok() {   # $1 = ラベル / $2.. = 対象の判定（タグ）
     if PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" >/dev/null 2>&1; then
         printf '  ✓ %s\n' "$1"; pass=$((pass + 1))
     else
@@ -63,6 +68,15 @@ expect_no() {   # $1 = ラベル / $2 = 出てはいけないメッセージ
     else
         printf '  ✓ %s\n' "$1"; pass=$((pass + 1))
     fi
+}
+
+# Note の判定は rule 名で対応づける（RULE_SINCE のキー）。
+# 壊れた例と正しい例の両方が無ければ、validate.py が違反にする。
+expect_rule() {      # $1 = rule / $2 = ラベル / $3 = 期待するメッセージ
+    expect "$2" "$3"
+}
+expect_no_rule() {   # $1 = rule / $2 = ラベル / $3 = 出てはいけないメッセージ
+    expect_no "$2" "$3"
 }
 
 sed_replace() {   # $1 = ファイル / $2 = 置換前 / $3 = 置換後
@@ -230,15 +244,15 @@ new_note '## Decision（判断）
 Improve。'
 expect "Decision の見直し条件の欠落" "見直し条件 が無い"
 expect "Decision の確認者の欠落" "確認者"
-expect "反証の節の欠落" "「反証」の節が無い"
+expect_rule counter-evidence "反証の節の欠落" "「反証」の節が無い"
 
 new_note '## Recommended Experiment（検証の設計）
 Success Criteria: 完了率が上がる。Decision Rule: 上がれば → 展開する。'
-expect "予測値の欠落" "予測値が無い"
+expect_rule prediction "予測値の欠落" "予測値が無い"
 
 new_note '## Hypothesis（仮説）
 棄却条件: 比率が高い実測が出れば棄却'
-expect "棄却条件の閾値の欠落" "観測可能な閾値が無い"
+expect_rule rejection-threshold "棄却条件の閾値の欠落" "観測可能な閾値が無い"
 
 new_note '## Evidence（根拠）
 ### Voice の取得
@@ -247,7 +261,7 @@ expect "### 見出しの言い換え漏れ" "見出しに日本語の言い換�
 
 new_note '## Evidence（根拠）
 全体の平均だけを見た（`Fact`。出典: 集計）。'
-expect "必須 Segment の未分解（警告）" "必須 Segment"
+expect_rule segment-declaration "必須 Segment の未分解（警告）" "必須 Segment"
 
 # 散文で語に触れただけでは分解したことにならない。
 # 旧実装は「本文のどこかに語が出現するか」を見ていたので、**否定文でも通っていた。**
@@ -262,7 +276,7 @@ new_note '## Evidence（根拠）
 |---|---|---|
 | 新規/既存 | 分解済み | 継続率 62% / 81%（`Fact`。出典: 集計） |
 | 利用頻度 | 分解済み | 週1以上 74%（`Fact`。出典: 集計） |'
-expect_no "表で宣言した Segment は通る" "必須 Segment"
+expect_no_rule segment-declaration "表で宣言した Segment は通る" "必須 Segment"
 
 # 引けないことを理由つきで宣言した Note は通す。
 # **誠実な文書と手抜きの文書を区別できない判定は、作文を生む。**
@@ -373,11 +387,71 @@ prune
 
 new_note '## Evidence（根拠）
 新規/既存 で見た。申込は 120 件だった（`Fact`）。'
-expect "数値の出典欠落（警告）" "出典（テーブル"
+expect_rule source-citation "数値の出典欠落（警告）" "出典（テーブル"
 
 new_note '## Evidence（根拠）
 新規/既存 で見た（`Fact`）。simulations/testprod/2026/20260901-x.md を参照した。'
 expect "予測データの参照" "予測データ（simulations/）を分析で参照している"
+
+# ---- 判定ごとの「正しい書き方の例」（締めたときに巻き込んでいないかを見る）
+
+new_note '## Decision（判断）
+Improve する。見直し条件: 4週後に再測する。確認者: 担当者。確からしさ: Medium。
+
+## 反証（この結論を否定する Evidence）
+- 同時期に別の告知を出しており、効果を切り分けられていない
+
+## Evidence（根拠）
+
+| Segment | 状態 | 内容 |
+|---|---|---|
+| 新規/既存 | 分解済み | 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | 分解済み | 74%（`Fact`。出典: 集計） |'
+expect_no_rule counter-evidence "反証がある Note は通る" "「反証」の節が無い"
+
+new_note '## Recommended Experiment（検証の設計）
+Success Criteria: 完了率が上がる。Decision Rule: 上がれば → 展開する。
+予測: 完了率が 5 ポイント上がると見ている。
+
+## Evidence（根拠）
+
+| Segment | 状態 | 内容 |
+|---|---|---|
+| 新規/既存 | 分解済み | 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | 分解済み | 74%（`Fact`。出典: 集計） |'
+expect_no_rule prediction "予測値がある Note は通る" "予測値が無い"
+
+new_note '## Hypothesis（仮説）
+棄却条件: 完了率の差が 3 ポイント未満なら棄却する
+
+## Evidence（根拠）
+
+| Segment | 状態 | 内容 |
+|---|---|---|
+| 新規/既存 | 分解済み | 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | 分解済み | 74%（`Fact`。出典: 集計） |'
+expect_no_rule rejection-threshold "閾値のある棄却条件は通る" "観測可能な閾値が無い"
+
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 |
+|---|---|---|
+| 新規/既存 | 分解済み | 申込 120 件（`Fact`。出典: 集計テーブル、期間 9月） |
+| 利用頻度 | 分解済み | 74%（`Fact`。出典: 集計テーブル、期間 9月） |'
+expect_no_rule source-citation "出典のある数値は通る" "出典（テーブル"
+
+# 300 行超（1回の分析として大きすぎる）
+new_note "$(printf '## Evidence（根拠）\n%s' "$(i=0; while [ $i -lt 320 ]; do printf '本文の行（`Fact`。出典: 集計）\n'; i=$((i+1)); done)")"
+expect_rule note-length "長すぎる Note（警告）" "300 行を超えている"
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 |
+|---|---|---|
+| 新規/既存 | 分解済み | 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | 分解済み | 74%（`Fact`。出典: 集計） |'
+expect_no_rule note-length "300 行以内の Note は通る" "300 行を超えている"
+
+expect_ok "正しい Note は通る" check_note
 
 rm "$PD/analyses/testprod/2026/20260903-01-t.md"
 prune
@@ -483,7 +557,7 @@ rm -f "$PD/voices/testprod/2026/VOICE-001-slow.md.bak"
 expect "年フォルダと captured_at の不一致" "captured_at"
 
 voice "" "利用者A-1: 「速い」"
-expect_ok "正しいボイスは通る"
+expect_ok "正しいボイスは通る" check_voice
 rm -r "$PD/voices/testprod"
 prune
 
@@ -602,7 +676,7 @@ uxdr "作業仮説" "## 決めなかったこと
 - 変わらなかったもの: 無し"
 expect_ok "表形式の棄却条件は通る（見出し行に閾値を求めない）"
 
-expect_ok "正しい UXDR は通る"
+expect_ok "正しい UXDR は通る" check_uxdr
 rm -r "$PD/decisions/testprod"
 prune
 prune
@@ -660,7 +734,7 @@ status: 計画
 
 逐語のまま pd/voices/ へ流す。
 EOF
-expect_ok "正しい探索計画は通る"
+expect_ok "正しい探索計画は通る" check_research
 
 # 検証計画（VP-）の判定は、探索計画に置き換わっていない
 BADVP="$PD/validations/testprod/2026/VP-20260901-01-hypo.md"
@@ -825,7 +899,7 @@ cat > "$PERSONA" <<'EOF'
 
 根拠件数 n = 0。確信度は未取得のため、像を書かない。
 EOF
-expect_ok "正しいペルソナは通る"
+expect_ok "正しいペルソナは通る" check_personas
 
 JOURNEY="$PD/specs/02-requirements/journeys.md"
 
@@ -867,7 +941,7 @@ cat > "$JOURNEY" <<'EOF'
 | 1 | 探す | VOICE-001 | 未取得 |
 | 2 | 決める | 一次情報なし | 未取得 |
 EOF
-expect_ok "正しいジャーニーは通る"
+expect_ok "正しいジャーニーは通る" check_journeys
 
 SCREEN="$PD/specs/04-skeleton/screens/list.md"
 
@@ -916,7 +990,7 @@ cat > "$SCREEN" <<'EOF'
 
 使用トークン: color.text.default
 EOF
-expect_ok "正しい画面仕様は通る"
+expect_ok "正しい画面仕様は通る" check_screen_spec
 
 TOKENS="$PD/specs/05-surface/design-tokens.md"
 
@@ -962,7 +1036,7 @@ cat > "$TOKENS" <<'EOF'
 |---|---|---|
 | 一覧の補助文言 | 下限割れ | 2026-09-30 |
 EOF
-expect_ok "正しいトークン台帳は通る"
+expect_ok "正しいトークン台帳は通る" check_design_tokens
 
 NAV="$PD/specs/04-skeleton/navigation.md"
 
@@ -990,7 +1064,7 @@ cat > "$NAV" <<'EOF'
 |---|---|
 | 一覧 | 入口 → 一覧 |
 EOF
-expect_ok "正しいナビは通る"
+expect_ok "正しいナビは通る" check_navigation check_spec
 
 # 「ユーザー」を単独で使う（どの系統か分からないまま合意が成立する）
 printf '\nユーザーが不便だと言っている。\n' >> "$NAV"
@@ -1066,6 +1140,90 @@ rm "$PD/specs/01-strategy/glossary.md"
 
 # specs は現在値。ここで作った検証用の成果物は残さない
 rm -rf "$PD/specs"
+
+# ------------------------------------------- 各文書の「正しい書き方」（正常系）
+#
+# 判定を締めたときに、正しく書いた文書を巻き込んでいないかを見る。
+# ここが薄いと、締めるたびに誤検知が出て「通すための記述」が書かれ始める。
+
+mkdir -p "$PD/measurements/testprod/2026" "$PD/reviews/testprod/2026" \
+         "$PD/simulations/testprod/2026" "$PD/validations/testprod/2026" \
+         "$PD/specs/01-strategy"
+
+cat > "$PD/measurements/testprod/2026/MP-20260901-01-time.md" <<'EOF'
+# 計測計画
+
+## 指標
+
+| 指標 | 現在値 |
+|---|---|
+| 主要タスク時間 | 42 秒 |
+| 品質（やり直し率） | 未取得 |
+EOF
+expect_ok "正しい計測計画は通る" check_measurement
+
+cat > "$PD/validations/testprod/2026/VP-20260901-02-ok.md" <<'EOF'
+# 検証計画
+
+## 仮説
+入口が分からないために離脱している。
+
+## 棄却条件
+入口を明示しても完了率が 3 ポイント未満しか動かなければ棄却する。
+
+## 設計
+行動観察（画面録画）で、入口に到達するまでの操作を見る。
+EOF
+expect_ok "正しい検証計画は通る" check_validation
+
+cat > "$PD/reviews/testprod/2026/DR-20260901-01-list.md" <<'EOF'
+# デザインレビュー
+
+## 見れば分かる課題
+- 押せる要素と押せない要素が同じ見た目になっている（デザイナー起案）
+
+## 検証しないと決まらない仮説
+- 並び順を変えると探す時間が短くなる（VOICE-001）
+EOF
+expect_ok "正しいレビュー結果は通る" check_review
+
+cat > "$PD/simulations/testprod/2026/20260901-plan.md" <<'EOF'
+---
+synthetic: true
+---
+
+# 予測データ
+
+> **これは予測データです。** Evidence として引用しない。
+> 設計の検証にのみ使う。
+
+## 想定
+入口を明示した場合の完了率を仮に置いた。
+EOF
+expect_ok "正しい予測データは通る" check_simulation
+
+cat > "$PD/specs/01-strategy/glossary.md" <<'EOF'
+# 用語集
+
+## 利用者の呼称
+
+| 呼称 | 指す人 |
+|---|---|
+| 予約者 | 席を予約する人 |
+| 店舗担当者 | 店側で予約を受ける人 |
+
+「ユーザー」を単独で使わない。どの系統かを必ず指定する。
+EOF
+expect_ok "正しい用語集は通る" check_naming
+
+expect_ok "正しい Product Context は通る" check_product
+
+rm "$PD/measurements/testprod/2026/MP-20260901-01-time.md" \
+   "$PD/validations/testprod/2026/VP-20260901-02-ok.md" \
+   "$PD/reviews/testprod/2026/DR-20260901-01-list.md" \
+   "$PD/simulations/testprod/2026/20260901-plan.md" \
+   "$PD/specs/01-strategy/glossary.md"
+prune
 
 # ---------------------------------------------------------------- 予測データ
 
@@ -1295,6 +1453,20 @@ sed_replace "$VALIDATE" 'note_warn(path, fm, "note-length"' \
                         'note_warn(path, fm, "unregistered-rule"'
 expect_plugin "RULE_SINCE に無い判定" "RULE_SINCE に無い"
 cp "$WORK/validate.py" "$VALIDATE"
+
+# 正しい書き方の例が無い判定を作れないようにする。
+# 壊れた例だけを増やすと、締めたときに正しい文書を巻き込んだことに気づけない
+cp "$PLUGIN/scripts/selftest.sh" "$WORK/selftest-cov.sh"
+sed_replace "$PLUGIN/scripts/selftest.sh" \
+  'expect_ok "正しいペルソナは通る" check_personas' \
+  'expect_ok "正しいペルソナは通る"'
+expect_plugin "正しい書き方の例の消失" "check_personas に正しい書き方の例が無い"
+cp "$WORK/selftest-cov.sh" "$PLUGIN/scripts/selftest.sh"
+
+sed_replace "$PLUGIN/scripts/selftest.sh" \
+  'expect_no_rule prediction ' 'expect_no_dropped ' 
+expect_plugin "判定の正しい例の消失（rule 単位）" "「prediction」の正しい例が無い"
+cp "$WORK/selftest-cov.sh" "$PLUGIN/scripts/selftest.sh"
 
 # Release はタグの push で自動作成する。無いと `--no-push` や手動 push で配った版の
 # 本文が起動時の更新通知に出ない（v1.4.0 で実際に漏れた）

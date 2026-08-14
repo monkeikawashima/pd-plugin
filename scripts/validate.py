@@ -1221,6 +1221,7 @@ def check_plugin_guards() -> None:
 
     check_version_consistency()
     check_rule_registry()
+    check_selftest_coverage()
 
     hooks_file = PLUGIN_ROOT / "hooks/hooks.json"
     if hooks_file.exists():
@@ -1495,6 +1496,63 @@ def check_version_consistency() -> None:
                           "新しいプロジェクトが旧版の判定器で CI を回すことになる")
 
 
+def _function_body(src: str, name: str) -> str | None:
+    """ソースから関数1つ分を切り出す。無ければ None。"""
+    parts = src.split(f"\ndef {name}", 1)
+    if len(parts) != 2:
+        return None
+    return re.split(r"\n(?=def |# -)", parts[1], maxsplit=1)[0]
+
+
+def check_selftest_coverage() -> None:
+    """判定に対して「**正しい書き方の例**」が置かれているか。
+
+    自己テストは「壊れた例を検出できること」ばかりを確かめていて、
+    「**正しく書いたものを落とさないこと**」をほとんど確かめていなかった
+    （壊れた例 75 に対して正しい例 11）。判定を締めるたびに正しい書き方の一部を
+    巻き込み、v1.5.2 と v1.5.3 で連続して誤検知を出した。
+
+    **誤検知が出ると、利用者は原因を追う代わりに「通る書き方」を探す。**
+    それは規律ではなく作文で、この plugin が防ごうとしているものそのもの。
+
+    要求する対象は**振り分け（`validate` / `check_spec`）から機械で数え上げる**。
+    一覧を手で持つと、文書の種類を足した人が一覧に書き忘れて終わる。
+    振り分けに繋がない限りその判定は動かないので、数え上げの漏れは起きない。
+    """
+    vp = PLUGIN_ROOT / "scripts/validate.py"
+    sp = PLUGIN_ROOT / "scripts/selftest.sh"
+    if not vp.exists() or not sp.exists():
+        return
+    src = vp.read_text(encoding="utf-8")
+    tests = sp.read_text(encoding="utf-8")
+
+    required: set[str] = set()
+    for entry in ("validate", "check_spec"):
+        body = _function_body(src, entry)
+        if body:
+            required |= set(re.findall(r"\b(check_[a-z_]+)\(path", body))
+    required.discard("check_path")
+
+    covered: set[str] = set()
+    # 行をまたがせない。`\s` は改行も食うため、タグの無い expect_ok が
+    # 次の行の語をタグとして拾ってしまう（実際に起きた）
+    for tag in re.findall(r'expect_ok[^\S\n]+"[^"]*"[^\S\n]+([a-z_][a-z_ ]*)', tests):
+        covered |= set(tag.split())
+    for name in sorted(required - covered):
+        err(sp, f"{name} に正しい書き方の例が無い。"
+                f"`expect_ok \"正しい…は通る\" {name}` を置く"
+                f"（壊れた例だけでは、判定を締めたときに正しい文書を"
+                f"巻き込んだことに気づけない）")
+
+    # Note の判定は、壊れた例と正しい例の両方を持つ（rule 名で対応づける）
+    for rule in sorted(RULE_SINCE):
+        if f"expect_rule {rule} " not in tests:
+            err(sp, f"判定「{rule}」の壊れた例が無い（expect_rule {rule} …）")
+        if f"expect_no_rule {rule} " not in tests:
+            err(sp, f"判定「{rule}」の正しい例が無い（expect_no_rule {rule} …）。"
+                    f"**締めたときに正しい書き方を巻き込んでいないか**を見る")
+
+
 def check_rule_registry() -> None:
     """Note への判定が、適用開始日を持たずに足されていないか。
 
@@ -1509,12 +1567,11 @@ def check_rule_registry() -> None:
     src = PLUGIN_ROOT / "scripts/validate.py"
     if not src.exists():
         return
-    body = src.read_text(encoding="utf-8").split("\ndef check_new_rules", 1)
-    if len(body) != 2:
+    body = _function_body(src.read_text(encoding="utf-8"), "check_new_rules")
+    if body is None:
         errors.append("scripts/validate.py: check_new_rules が無い"
                       "（Note への判定の入口が失われている）")
         return
-    body = re.split(r"\n(?=def |# -)", body[1], maxsplit=1)[0]
 
     for line in body.split("\n"):
         m = re.search(r"(?<![_a-zA-Z])(err|warn)\(", line)
