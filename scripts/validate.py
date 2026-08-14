@@ -171,7 +171,18 @@ RULES_FROM = "2026-08-12"
 #
 # 遡って効かせると、通すために過去を書き換えることになる。**追記のみの記録に
 # 後付けの規約を適用しない。** 判定を足したら、その版の日付をここに書く。
+# **書き忘れは検出される。** `check_new_rules` の中で `err(` / `warn(` を直に呼ぶと
+# `check_rule_registry()` が違反にする。判定を足すには `note_err` / `note_warn` を
+# 使うしかなく、そこには rule 名が要り、rule 名はこの表に無ければ違反になる。
+# 規律ではなく仕組みで塞ぐ（v1.5.0 は「気をつける」で失敗した）。
 RULE_SINCE = {
+    # v1.0.0 以前からある判定（規約の運用開始と同時）
+    "counter-evidence": "2026-08-12",
+    "prediction": "2026-08-12",
+    "rejection-threshold": "2026-08-12",
+    "source-citation": "2026-08-12",
+    "note-length": "2026-08-12",
+    # あとから足した判定
     "segment-declaration": "2026-08-14",   # v1.5.0
 }
 
@@ -328,6 +339,20 @@ def applies_since(fm: dict[str, str], rule: str) -> bool:
     return fm.get("date", "") >= RULE_SINCE.get(rule, RULES_FROM)
 
 
+def note_err(path: Path, fm: dict[str, str], rule: str,
+             msg: str, line: int | None = None) -> None:
+    """Note への違反。**適用開始日を通ったものだけ**を記録する。"""
+    if applies_since(fm, rule):
+        err(path, msg, line)
+
+
+def note_warn(path: Path, fm: dict[str, str], rule: str,
+              msg: str, line: int | None = None) -> None:
+    """Note への警告。同上。"""
+    if applies_since(fm, rule):
+        warn(path, msg, line)
+
+
 OPEN_CLOSE = {"（": "）", "(": ")", "「": "」", "『": "』", "[": "]", "{": "}"}
 
 
@@ -423,7 +448,7 @@ SEGMENT_UNKNOWN = ("Unknown", "未計測", "未取得", "不明", "引けない"
 
 
 def segment_declarations(text: str) -> list[tuple[str, str]]:
-    """表の行・見出しという「宣言の位置」だけを拾う。
+    """「宣言の位置」だけを拾う。
 
     散文の substring マッチをやめる理由。あれが測っていたのは**語が本文のどこかに
     出現するか**であって、分解されたかではない。だから両方向に外れた。
@@ -432,19 +457,50 @@ def segment_declarations(text: str) -> list[tuple[str, str]]:
     - 偽陽性 — 誠実に「データが無いので分解できない」と書いた Note が落ちる
 
     後者が起きると、語を1つ本文に置けば警告が消える。**それは規律ではなく作文になる。**
+
+    宣言と認めるのは**状態を伴う表の行だけ**。見出しや、たまたま語を含む無関係な
+    表の行は数えない。状態の無い行を認めると、語をどこかの表に置けば消えてしまい、
+    散文の substring マッチと同じ抜け道が残る。
     """
     out: list[tuple[str, str]] = []
     for line in text.split("\n"):
         s = line.strip()
-        if s.startswith("|"):
-            if TABLE_SEPARATOR.match(line):
-                continue
-            cells = [c.strip() for c in s.strip("|").split("|")]
-            if cells:
-                out.append((cells[0], " ".join(cells[1:])))
-        elif s.startswith("#"):
-            out.append((s.lstrip("#").strip(), ""))
+        if not s.startswith("|") or TABLE_SEPARATOR.match(line):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        rest = " ".join(cells[1:])
+        if _states_something(rest):
+            out.append((cells[0], rest))
     return out
+
+
+def _states_something(rest: str) -> bool:
+    """その行は「状態」を述べているか（分解した / 引けない / 実際の値がある）。"""
+    return (any(u in rest for u in SEGMENT_UNKNOWN)
+            or "分解" in rest
+            or re.search(r"[0-9０-９]", rest) is not None)
+
+
+def check_segment_definition(path: Path, text: str) -> None:
+    """必須 Segment の定義が、区切りを読み違えられる形で書かれていないか。
+
+    v1.5.0 で旧形式の分割から ASCII の `/` を外した（`新規/既存` が2つの軸に
+    割れていたため）。**その結果、`/` を区切りとして使っていた定義は、1つの長い
+    軸名として扱われ、以後の Note が必ず警告される。** 黙って壊れる側に倒さない。
+    """
+    if _segments_from_frontmatter(text):
+        return
+    for i, line in enumerate(text.split("\n"), 1):
+        if not line.strip().startswith("必須 Segment:"):
+            continue
+        body = line.split(":", 1)[1]
+        if "/" in body and not any(c in body for c in "・、／"):
+            warn(path, "必須 Segment の区切りが読み取れない（`/` は軸名の一部として"
+                       "扱うため、全体が1つの軸になる）。frontmatter の "
+                       "`segments:` で宣言する", i)
+        return
 
 
 def _has_reason(rest: str) -> bool:
@@ -575,12 +631,14 @@ def check_new_rules(path: Path, text: str, fm: dict[str, str]) -> None:
 
     # ③ 反証の節（Decision がある分析には必須）
     if any("Decision" in k for k in secs) and not any("反証" in k for k in secs):
-        err(path, "「反証」の節が無い（この結論を最も強く否定する Evidence。箇条書き2〜3行で足りる）")
+        note_err(path, fm, "counter-evidence",
+                 "「反証」の節が無い（この結論を最も強く否定する Evidence。箇条書き2〜3行で足りる）")
 
     # ① 予測値
     for name, body in secs.items():
         if "Experiment" in name and "予測" not in body:
-            err(path, f"「{name}」に予測値が無い（事前に「どれくらい動くと思うか」を書く）")
+            note_err(path, fm, "prediction",
+                     f"「{name}」に予測値が無い（事前に「どれくらい動くと思うか」を書く）")
 
     # ② 棄却条件の閾値（表のヘッダ行は対象外）
     lines = text.split("\n")
@@ -590,32 +648,36 @@ def check_new_rules(path: Path, text: str, fm: dict[str, str]) -> None:
         nxt = lines[i] if i < len(lines) else ""
         if TABLE_SEPARATOR.match(nxt):
             continue   # 表のヘッダ行
-        err(path, "棄却条件に観測可能な閾値が無い（数値・比較で書く。暫定なら明示する）", i)
+        note_err(path, fm, "rejection-threshold",
+                 "棄却条件に観測可能な閾値が無い（数値・比較で書く。暫定なら明示する）", i)
 
     # ⑤ 必須 Segment（警告）
     # 沈黙している Note だけを警告する。分解できないことを理由つきで宣言した Note は
     # 通す — 誠実な文書と手抜きの文書を、判定器が区別できるようにするため。
-    for sg in (required_segments(fm.get("product", ""))
-               if applies_since(fm, "segment-declaration") else []):
+    for sg in required_segments(fm.get("product", "")):
         keys = [k for k in (sg["label"], sg.get("id", "")) if k]
         hit = next(((head, rest) for head, rest in segment_declarations(text)
                     if any(k in head for k in keys)), None)
         if hit is None:
-            warn(path, f"必須 Segment「{sg['label']}」の宣言が無い"
-                       f"（分解した結果か、引けない理由かを表の行として書く。"
-                       f"散文で触れるだけでは分解したことにならない）")
+            note_warn(path, fm, "segment-declaration",
+                      f"必須 Segment「{sg['label']}」の宣言が無い"
+                      f"（分解した結果か、引けない理由かを表の行として書く。"
+                      f"書き方は framework/kpi.md の「必須 Segment」を見る）")
         elif any(u in hit[1] for u in SEGMENT_UNKNOWN) and not _has_reason(hit[1]):
-            warn(path, f"必須 Segment「{sg['label']}」が引けないとだけ書かれている"
-                       f"（なぜ引けないか / いつ引けるようになるかを添える。"
-                       f"理由の無い Unknown は、次に誰も追えない）")
+            note_warn(path, fm, "segment-declaration",
+                      f"必須 Segment「{sg['label']}」が引けないとだけ書かれている"
+                      f"（なぜ引けないか / いつ引けるようになるかを添える。"
+                      f"理由の無い Unknown は、次に誰も追えない）")
 
     # ⑦ 出典と分量（警告）
     for name, body in secs.items():
         if name.startswith("Evidence") and re.search(r"[0-9０-９]", body) \
                 and not re.search(r"出典|期間|条件|テーブル|集計", body):
-            warn(path, f"「{name}」に数値があるが、出典（テーブル / 期間 / 条件）が無い")
+            note_warn(path, fm, "source-citation",
+                      f"「{name}」に数値があるが、出典（テーブル / 期間 / 条件）が無い")
     if len(text.split("\n")) > 300:
-        warn(path, "Note が 300 行を超えている（1回の分析として大きすぎる可能性）")
+        note_warn(path, fm, "note-length",
+                  "Note が 300 行を超えている（1回の分析として大きすぎる可能性）")
 
 
 HEDGES = ["かもしれない", "と思われる", "だろう", "おそらく", "ように見える",
@@ -912,6 +974,17 @@ SPEC_COUNTER = ("✗", "❌", "書かない", "書かず", "禁止",
                 "記載しない", "持たせない", "混ぜない")
 
 
+# 反例であることを示す印。**記号は閉じた集合なので、ここに足しても増え続けない。**
+# 語彙リスト（SPEC_COUNTER）を捨てたとき、この2つまで一緒に捨てたのが v1.5.0 の誤り。
+# 引用せずに `✗ ユーザーが迷う` と書いた反例行が、そのまま違反として拾われていた。
+COUNTER_MARK = ("✗", "❌")
+
+
+def _is_counter_example(line: str, word: str) -> bool:
+    """その行は、対象語を使っている実例ではなく**反例**か。"""
+    return any(c in line for c in COUNTER_MARK) or _is_mention(line, word)
+
+
 def _is_mention(line: str, word: str) -> bool:
     """その行は語を「使って」いるのか、「言及して」いるだけか。
 
@@ -959,7 +1032,7 @@ def check_personas(path: Path) -> None:
 
     for i, line in enumerate(text.split("\n"), 1):
         for word in DECORATION:
-            if word in line and not _is_mention(line, word):
+            if word in line and not _is_counter_example(line, word):
                 warn(path, f"装飾属性「{word}」がある（判断に効かず、"
                            f"検証されていない断定が混ざる）", i)
                 break
@@ -1066,7 +1139,7 @@ def check_naming(path: Path) -> None:
     if rel_to_base(path) == NAMING_AUTHORITY:
         return
     for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
-        if _is_mention(line, "ユーザー"):
+        if _is_counter_example(line, "ユーザー"):
             continue
         if BARE_USER.search(line):
             warn(path, "「ユーザー」を単独で使っている。どの利用者系統かを指定する"
@@ -1128,6 +1201,7 @@ def check_plugin_guards() -> None:
             errors.append(f"{name}: 無い（検証の仕組みが不完全）")
 
     check_version_consistency()
+    check_rule_registry()
 
     hooks_file = PLUGIN_ROOT / "hooks/hooks.json"
     if hooks_file.exists():
@@ -1402,6 +1476,44 @@ def check_version_consistency() -> None:
                           "新しいプロジェクトが旧版の判定器で CI を回すことになる")
 
 
+def check_rule_registry() -> None:
+    """Note への判定が、適用開始日を持たずに足されていないか。
+
+    v1.5.0 で判定を1つ足したとき、`RULE_SINCE` に相当するものが無かったため
+    **書いた時点で存在しない判定が既存の記録に遡って適用された**。v1.5.1 で表を
+    足したが、表に書き忘れても何も起きないままだった。**「気をつける」に戻っていた。**
+
+    ここで塞ぐ。`check_new_rules` の中で `err(` / `warn(` を直に呼べば違反になり、
+    `note_err` / `note_warn` を使えば rule 名が要り、rule 名は `RULE_SINCE` に
+    無ければ違反になる。**判定を足す道が、日付を書く道しか無くなる。**
+    """
+    src = PLUGIN_ROOT / "scripts/validate.py"
+    if not src.exists():
+        return
+    body = src.read_text(encoding="utf-8").split("\ndef check_new_rules", 1)
+    if len(body) != 2:
+        errors.append("scripts/validate.py: check_new_rules が無い"
+                      "（Note への判定の入口が失われている）")
+        return
+    body = re.split(r"\n(?=def |# -)", body[1], maxsplit=1)[0]
+
+    for line in body.split("\n"):
+        m = re.search(r"(?<![_a-zA-Z])(err|warn)\(", line)
+        if m:
+            err(src, f"check_new_rules で {m.group(1)}() を直に呼んでいる。"
+                     f"**適用開始日を通らないため、書いた時点で存在しない判定が"
+                     f"過去の Note に遡って効く。** note_err / note_warn を使う")
+
+    used = set(re.findall(r'note_(?:err|warn)\(path, fm, "([a-z0-9-]+)"', body))
+    for rule in sorted(used - set(RULE_SINCE)):
+        err(src, f"判定「{rule}」が RULE_SINCE に無い"
+                 f"（いつからの Note に適用するかが決まっていない。"
+                 f"その判定を入れた版の日付を書く）")
+    if not used:
+        err(src, "check_new_rules に rule 付きの判定が1つも無い"
+                 "（適用開始日の仕組みが外されている）")
+
+
 def check_project_guards() -> None:
     """plugin を使うプロジェクト側に、検証を成り立たせるものが揃っているか。"""
     hooks_file = PLUGIN_ROOT / "hooks/hooks.json"
@@ -1453,12 +1565,18 @@ def check_ci_ref(ci: Path, body: str) -> None:
     if not version:
         return
 
-    refs = re.findall(r"ref:\s*v?([\d.]+)", body)
+    # **版として読めるのは semver のタグだけ。** `[\d.]+` で拾うと、commit SHA を
+    # 指した `ref: 4762a00` が「v4762」という版として比較され、
+    # 「手元より新しい」という意味の通らない警告が出ていた。
+    raw = [r.strip() for r in re.findall(r"ref:\s*(\S+)", body)]
+    refs = [r.lstrip("v") for r in raw if re.fullmatch(r"v?\d+\.\d+\.\d+", r)]
     if not refs:
-        # 版を固定していない = CI が既定ブランチを追う。判定が予告なく変わり、
-        # 手元を更新していないのに CI だけ落ちる日が来る。
-        warn(ci, f"plugin の版を固定していない（ref が無い）。"
-                 f"`ref: v{version}` を指定する")
+        # 版を固定していない = CI が既定ブランチや commit を追う。判定が予告なく
+        # 変わり、手元を更新していないのに CI だけ落ちる日が来る。
+        fixed = "・".join(raw) if raw else "ref が無い"
+        warn(ci, f"plugin の版を固定していない（{fixed}）。"
+                 f"commit やブランチではなく、`ref: v{version}` のようにタグで指定する"
+                 f"（版が読めないと、手元との食い違いを検出できない）")
         return
 
     for ref in set(refs):
@@ -1478,6 +1596,7 @@ def _parts(v: str) -> tuple:
 
 def check_product(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
+    check_segment_definition(path, text)
     for heading in ["## Available Evidence", "## Past Experiments",
                     "## Decisions", "### 保留中の見直し", "## Unknowns"]:
         if heading not in text:

@@ -27,11 +27,14 @@ description: pd がこのプロジェクトに作ったものを一覧表示し�
 - `.github/workflows/validate.yml` — **pd の CI である場合のみ**。`pd-plugin` を checkout している行が無ければ他人の CI なので触らない
 - `.gitignore` の `pd/.local/` の行（`.local/` のみの旧レイアウトも同様）
 - `CLAUDE.md` の「pd の規約」節
+- `pd/voices/taxonomy.json` — 話者の役割の定義。**pd 固有の設定であって分析結果ではない**。空になった `pd/voices/` は消さない（声そのものは残す）
 
 **分析結果**（`--purge` でのみ消す）
 
 - `pd/products/` `pd/analyses/` `pd/voices/` `pd/simulations/` `pd/specs/` `pd/decisions/` `pd/validations/` `pd/measurements/` `pd/reviews/`
 - 旧レイアウト（root 直下に置いている場合）は同名の root 直下ディレクトリ
+
+`pd/specs/01-strategy/glossary.md` は `/pd:init` が雛形として作るが、**中身は利用者が書いたもの**なので `--purge` でしか消さない。雛形のまま1文字も書かれていない場合だけ、仕組み側として消してよいか個別に確認する。
 
 ## 手順
 

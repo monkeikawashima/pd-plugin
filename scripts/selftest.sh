@@ -282,6 +282,15 @@ new_note '## Evidence（根拠）
 | 利用頻度 | Unknown | |'
 expect "理由の無い Unknown（警告）" "引けないとだけ書かれている"
 
+# 状態を伴わない行は宣言と認めない（語をどこかの表に置けば消える抜け道を残さない）
+new_note '## Evidence（根拠）
+
+| 用語 | 説明 |
+|---|---|
+| 新規/既存 | 初回かどうか |
+| 利用頻度 | 使う回数 |'
+expect "状態の無い表の行は宣言と認めない" "「新規/既存」の宣言が無い"
+
 # 定義側。括弧の内側の `/` で切ると、照合語が壊れて原理的に通らなくなる
 sed_replace "$PD/products/testprod.md" \
   '必須 Segment: 新規/既存 ・ 利用頻度' \
@@ -751,6 +760,34 @@ cat > "$PERSONA" <<'EOF'
 EOF
 expect_no "引用した装飾属性は通す（語尾が「使わない」でも）" "装飾属性"
 
+cat > "$PERSONA" <<'EOF'
+# 利用者像
+
+| 書く | 書かない |
+|---|---|
+| 探すのに手が止まる | ✗ 年齢 42歳 |
+
+## 利用者A
+
+| 項目 | 値 |
+|---|---|
+| 根拠件数 | n = 3 |
+| 確信度 | 実証 |
+
+### 関心
+
+| 関心 | 根拠 |
+|---|---|
+| 探すのに手が止まる | VOICE-001 |
+
+### 非対象
+
+| 含めない人 | 理由 |
+|---|---|
+| 未定義 | |
+EOF
+expect_no "✗ 印の反例行は通す（装飾属性）" "装飾属性"
+
 # 正常なペルソナ（件数0の系統を「未取得」で残す形も含む）
 cat > "$PERSONA" <<'EOF'
 # 利用者像
@@ -990,6 +1027,26 @@ cat > "$NAV" <<'EOF'
 EOF
 expect_no "引用した規約文は通す（語尾が「使わない」でも）" "「ユーザー」を単独で使っている"
 
+# ✗ 印の反例行。記号は閉じた集合なので、除外に残しても増え続けない
+cat > "$NAV" <<'EOF'
+# ナビゲーション
+
+| 良い例 | 悪い例 |
+|---|---|
+| 予約者が迷う | ✗ ユーザーが迷う |
+
+| 項目名 | 対応先の種別 | 対応先 |
+|---|---|---|
+| 一覧 | 対象物 | 記録 |
+
+## 到達経路
+
+| 画面 | 到達経路 |
+|---|---|
+| 一覧 | 入口 → 一覧 |
+EOF
+expect_no "✗ 印の反例行は通す（呼称）" "「ユーザー」を単独で使っている"
+
 # 呼称を決める当のファイルを、その規約で裁かない（自己言及の矛盾）
 mkdir -p "$PD/specs/01-strategy"
 printf '# 用語集\n\nユーザーが不便、のような書き方をしない。\n' \
@@ -1108,7 +1165,9 @@ sed_replace "$CI" "ref: v$PLUGIN_VERSION" "ref: v0.0.1"
 expect "CI が固定する plugin の版が古い" "CI が固定している plugin の版が古い"
 sed_replace "$CI" "ref: v0.0.1" "ref: v9999.0.0"
 expect "CI が固定する plugin の版が手元より新しい" "手元より新しい"
-sed_replace "$CI" "          ref: v9999.0.0
+sed_replace "$CI" "ref: v9999.0.0" "ref: 4762a00"
+expect "CI が commit を指している（版として読めない）" "plugin の版を固定していない"
+sed_replace "$CI" "          ref: 4762a00
 " ""
 expect "CI が plugin の版を固定していない" "plugin の版を固定していない"
 sed_replace "$CI" "          path: .pd-plugin" "          ref: v$PLUGIN_VERSION
@@ -1204,6 +1263,21 @@ mv "$WORK/selftest.sh" "$PLUGIN/scripts/selftest.sh"
 mv "$PLUGIN/scripts/release.sh" "$WORK/release.sh"
 expect_plugin "配布手順の削除" "scripts/release.sh: 無い"
 mv "$WORK/release.sh" "$PLUGIN/scripts/release.sh"
+
+# 適用開始日を持たない判定を足せないようにする。
+# v1.5.0 は「表に書き忘れても何も起きない」状態で、規律に戻っていた
+cp "$VALIDATE" "$WORK/validate.py"
+sed_replace "$VALIDATE" \
+  '    """基準日以降の Note に適用する規約。"""' \
+  '    """基準日以降の Note に適用する規約。"""
+    warn(path, "あとから足した判定")'
+expect_plugin "適用開始日を通らない判定の追加" "直に呼んでいる"
+cp "$WORK/validate.py" "$VALIDATE"
+
+sed_replace "$VALIDATE" 'note_warn(path, fm, "note-length"' \
+                        'note_warn(path, fm, "unregistered-rule"'
+expect_plugin "RULE_SINCE に無い判定" "RULE_SINCE に無い"
+cp "$WORK/validate.py" "$VALIDATE"
 
 # Release はタグの push で自動作成する。無いと `--no-push` や手動 push で配った版の
 # 本文が起動時の更新通知に出ない（v1.4.0 で実際に漏れた）

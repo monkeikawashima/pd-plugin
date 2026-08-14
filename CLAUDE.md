@@ -25,6 +25,10 @@ sh scripts/selftest.sh          # 検証器が本当に違反を検出するか
 
 **常に成功する検証器は、無いのと同じ。** 判定を追加したら `selftest.sh` にも壊れた例を1つ追加する。緩める場合は理由を `DECISIONS.md` §2 に残す。
 
+**自己テストの件数を文書に書かない。** 書いた瞬間から古くなり、読む人は現在の数だと誤読する。数が要るなら `sh scripts/selftest.sh` を実行する。
+
+**Note への判定を足すときは `note_err` / `note_warn` を使う。** `check_new_rules` の中で `err()` / `warn()` を直に呼ぶと `validate.py` 自身が違反にする。rule 名は `RULE_SINCE` に登録が要り、そこに**その判定を入れた版の日付**を書く。書き忘れると、書いた時点で存在しない判定が過去の Note に遡って効く（v1.5.0 で実際に起きた）。
+
 `validate.py` は配布物の欠落も見ている（`plugin.json` / `marketplace.json` / `hooks.json` / 各コマンド / CI）。仕組みごと外される穴を塞ぐため。
 
 ---
