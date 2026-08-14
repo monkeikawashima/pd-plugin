@@ -321,6 +321,37 @@ new_note '## Evidence（根拠）
 | 新規/既存 | 分解済み | 62% / 81%（`Fact`。出典: 集計） |'
 expect "構造化リストの片方が沈黙している" "「利用頻度」の宣言が無い"
 
+# 判定を足した日より前に書かれた Note には、その判定を適用しない。
+# RULES_FROM は「規約の運用を始めた日」であって、あとから足した判定の適用日ではない。
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 / 引けない理由 |
+|---|---|---|
+| 新規/既存 | 分解済み | 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | 分解済み | 74%（`Fact`。出典: 集計） |'
+cat > "$PD/analyses/testprod/2026/20260813-01-old.md" <<EOF
+---
+product:   testprod
+date:      2026-08-13
+author:    selftest
+question:  検証用
+framework: discovery
+status:    完了
+---
+
+# 検証用
+
+> **記述のラベル** — 各記述がどの状態の情報かを示す。
+> \`Fact\` 実際に確認できた ／ \`Interpretation\` そこから読み取れること
+> \`Hypothesis\` まだ確かめていない考え ／ \`Unknown\` 分からない
+
+## 現状
+全体の平均だけを見た（\`Fact\`。出典: 集計）。
+EOF
+expect_no "判定の追加日より前の Note には適用しない" "の宣言が無い"
+rm "$PD/analyses/testprod/2026/20260813-01-old.md"
+prune
+
 new_note '## Evidence（根拠）
 新規/既存 で見た。申込は 120 件だった（`Fact`）。'
 expect "数値の出典欠落（警告）" "出典（テーブル"

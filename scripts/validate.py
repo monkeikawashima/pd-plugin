@@ -160,6 +160,21 @@ IMMUTABLE_DIRS = ("analyses", "voices", "simulations",
 # 新しい規約（反証 / 予測値 / 棄却条件の閾値）の適用開始日
 RULES_FROM = "2026-08-12"
 
+# 判定ごとの適用開始日。
+#
+# **`RULES_FROM` は「規約の運用を始めた日」であって、あとから足した判定を遡って
+# 効かせるための日付ではない。** ここを分けていなかったため、判定を1つ足すたびに
+# 運用開始日以降の全 Note がその判定の対象になっていた。DECISIONS.md §2 に
+# 「新しい規約を既存の記録には適用しない」と決めてあるのに、**判定を足すたびに
+# その原則が破れる構造**になっていた（v1.5.0 で実際に起き、書いた時点で存在しない
+# 判定によって既存 Note が警告された）。
+#
+# 遡って効かせると、通すために過去を書き換えることになる。**追記のみの記録に
+# 後付けの規約を適用しない。** 判定を足したら、その版の日付をここに書く。
+RULE_SINCE = {
+    "segment-declaration": "2026-08-14",   # v1.5.0
+}
+
 # 規約の追加より前に書かれた Note。日付では分けられないため明示的に除外する
 # （追加日と同じ日に既存と新規が混在するため。理由は DECISIONS.md §2）
 # 現在は対象なし（該当した Note は削除済み）
@@ -306,6 +321,11 @@ def applies(path: Path, fm: dict[str, str]) -> bool:
     if rel_to_root(path) in LEGACY_NOTES:
         return False
     return fm.get("date", "") >= RULES_FROM
+
+
+def applies_since(fm: dict[str, str], rule: str) -> bool:
+    """あとから足した判定の対象か。書かれた時点で存在しない判定は適用しない。"""
+    return fm.get("date", "") >= RULE_SINCE.get(rule, RULES_FROM)
 
 
 OPEN_CLOSE = {"（": "）", "(": ")", "「": "」", "『": "』", "[": "]", "{": "}"}
@@ -575,7 +595,8 @@ def check_new_rules(path: Path, text: str, fm: dict[str, str]) -> None:
     # ⑤ 必須 Segment（警告）
     # 沈黙している Note だけを警告する。分解できないことを理由つきで宣言した Note は
     # 通す — 誠実な文書と手抜きの文書を、判定器が区別できるようにするため。
-    for sg in required_segments(fm.get("product", "")):
+    for sg in (required_segments(fm.get("product", ""))
+               if applies_since(fm, "segment-declaration") else []):
         keys = [k for k in (sg["label"], sg.get("id", "")) if k]
         hit = next(((head, rest) for head, rest in segment_declarations(text)
                     if any(k in head for k in keys)), None)
