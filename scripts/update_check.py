@@ -179,7 +179,10 @@ def notice() -> str | None:
         "    /pd:update",
     ]
 
-    notes = (data.get("notes") or "").splitlines()
+    # Release の本文は「要約 --- 全文」の順に組んである（changelog_section.py）。
+    # 通知に出すのは要約まで。区切りが無い本文（手で作った Release など）は
+    # 従来どおり先頭から数行を出す。
+    notes = (data.get("notes") or "").split("\n---", 1)[0].splitlines()
     if notes:
         lines += ["", "この版の変更:"]
         lines += [f"    {line}" for line in notes[:NOTES_LINES] if line.strip()]

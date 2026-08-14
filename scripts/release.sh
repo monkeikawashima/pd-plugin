@@ -123,5 +123,23 @@ step "push する"
 git push
 git push origin "v$VERSION"
 
+# ------------------------------------------------------------------ 知らせる
+#
+# Release を作ると、その本文が起動時の更新通知に出る（update_check.py）。
+# 無くてもタグへフォールバックするので、ここで失敗しても配布は完了している。
+# `set -e` に巻き込まれないよう、失敗は警告に留める。
+step "GitHub Release を作る"
+NOTES=$(mktemp)
+trap 'rm -f "$NOTES"' EXIT
+if python3 scripts/changelog_section.py "$VERSION" > "$NOTES" 2>/dev/null \
+   && gh release create "v$VERSION" --title "v$VERSION" --notes-file "$NOTES" 2>/dev/null; then
+    printf '  作成した\n'
+else
+    printf '⚠ Release を作れなかった（gh が無い／認証切れ／既にある）。\n'
+    printf '  配布は完了している。通知はタグから出るので、作らなくても壊れない。\n'
+    printf '  手で作る場合: python3 scripts/changelog_section.py %s | gh release create v%s --title v%s --notes-file -\n' \
+        "$VERSION" "$VERSION" "$VERSION"
+fi
+
 printf '\n✓ v%s を配った\n' "$VERSION"
 printf '  利用者に届くのは /plugin update を実行した人だけ（自動更新は既定で無効）\n'

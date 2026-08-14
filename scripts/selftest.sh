@@ -1172,6 +1172,59 @@ else
     printf '  ✗ pd と無関係なプロジェクトで動いている: %s\n' "$out"; fail=$((fail + 1))
 fi
 
+# --------------------------------------------------- Release 本文の組み立て
+#
+# 更新通知は本文の先頭 8 行しか出さない（update_check.py の NOTES_LINES）。
+# 要約が先頭に来ないと、長い箇条書きの途中で切れたものが利用者に届く。
+CLBAK="$WORK/CHANGELOG.bak"
+cp "$PLUGIN/CHANGELOG.md" "$CLBAK"
+cat > "$PLUGIN/CHANGELOG.md" <<'EOF'
+# 変更履歴
+
+## [9.9.9] — 2026-01-01
+
+### 追加 — 一行目に出るべき要約
+
+本文の段落。ここは通知に出てはいけない。
+
+- 箇条書き
+
+## [9.9.8] — 2025-12-31
+
+### 変更 — 前の版の見出し
+EOF
+
+SECTION=$(python3 "$PLUGIN/scripts/changelog_section.py" 9.9.9)
+
+if [ "$(printf '%s\n' "$SECTION" | head -1)" = "- 追加 — 一行目に出るべき要約" ]; then
+    printf '  ✓ Release 本文の先頭に要約が来る\n'; pass=$((pass + 1))
+else
+    printf '  ✗ Release 本文の先頭が要約でない: %s\n' \
+        "$(printf '%s\n' "$SECTION" | head -1)"; fail=$((fail + 1))
+fi
+
+# 通知は「---」より前だけを出す（update_check.py と同じ切り方）
+if printf '%s\n' "$SECTION" | sed -n '1,/^---$/p' | grep -q "通知に出てはいけない"; then
+    printf '  ✗ 通知に本文が混ざる（要約で切れていない）\n'; fail=$((fail + 1))
+else
+    printf '  ✓ 通知には要約だけが出る\n'; pass=$((pass + 1))
+fi
+
+if printf '%s\n' "$SECTION" | grep -q "前の版の見出し"; then
+    printf '  ✗ 次の版のセクションまで拾っている\n'; fail=$((fail + 1))
+else
+    printf '  ✓ 1つの版だけを切り出す\n'; pass=$((pass + 1))
+fi
+
+# 中身の無い Release を作らせない
+if python3 "$PLUGIN/scripts/changelog_section.py" 0.0.1 >/dev/null 2>&1; then
+    printf '  ✗ CHANGELOG に無い版でも成功した\n'; fail=$((fail + 1))
+else
+    printf '  ✓ CHANGELOG に無い版では失敗する\n'; pass=$((pass + 1))
+fi
+
+cp "$CLBAK" "$PLUGIN/CHANGELOG.md"
+
 # ------------------------------------------------------- スキーマの三者一致
 #
 # 規約を書いた文書と、判定するコードは別々に育つ。片方だけ変えると
