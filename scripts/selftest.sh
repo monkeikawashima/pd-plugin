@@ -458,6 +458,247 @@ rm -r "$PD/decisions/testprod"
 prune
 prune
 
+# ---------------------------------------------------------------- 層の成果物
+#
+# specs/ は現在値であり追記のみではない。台帳ではなく**空白の書き方**を見る。
+# 判定を足したら、ここに壊れた例を1つ足す。
+
+mkdir -p "$PD/specs/01-strategy" "$PD/specs/02-requirements" \
+         "$PD/specs/04-skeleton/screens" "$PD/specs/05-surface"
+
+PERSONA="$PD/specs/01-strategy/personas.md"
+
+# 台帳を引かずに書いた像（＝集計ではなく創作）
+cat > "$PERSONA" <<'EOF'
+# 利用者像
+
+## 利用者A
+よく使ってくれている人。
+EOF
+expect "ペルソナの確信度の欠落" "確信度"
+expect "ペルソナの根拠の欠落" "台帳を引かずに書いた像"
+expect "ペルソナの非対象の欠落" "非対象"
+
+# 作業仮説なのに捨てる条件が無い
+cat > "$PERSONA" <<'EOF'
+# 利用者像
+
+## 利用者A
+
+| 項目 | 値 |
+|---|---|
+| 根拠件数 | n = 3 |
+| 確信度 | 作業仮説 |
+
+### 関心
+
+| 関心 | 根拠 |
+|---|---|
+| 探すのに手が止まる | VOICE-001 |
+
+### 非対象
+
+| 含めない人 | 理由 |
+|---|---|
+| 未定義 | |
+EOF
+expect "ペルソナの棄却条件の欠落" "棄却条件が無い"
+
+# 装飾属性は警告（誤検知で判定器を殺さないため、止めはしない）
+cat > "$PERSONA" <<'EOF'
+# 利用者像
+
+## 利用者A
+
+| 項目 | 値 |
+|---|---|
+| 根拠件数 | n = 3 |
+| 確信度 | 実証 |
+| 年齢 | 42歳 |
+
+### 関心
+
+| 関心 | 根拠 |
+|---|---|
+| 探すのに手が止まる | VOICE-001 |
+
+### 非対象
+
+| 含めない人 | 理由 |
+|---|---|
+| 未定義 | |
+EOF
+expect "ペルソナの装飾属性（警告）" "装飾属性"
+
+# 正常なペルソナ（件数0の系統を「未取得」で残す形も含む）
+cat > "$PERSONA" <<'EOF'
+# 利用者像
+
+## 利用者A
+
+| 項目 | 値 |
+|---|---|
+| 根拠件数 | n = 3（2026-01 〜 2026-08） |
+| 確信度 | 実証 |
+
+### 関心
+
+| 関心 | 根拠 |
+|---|---|
+| 探すのに手が止まる | VOICE-001 |
+
+### 非対象
+
+| 含めない人 | 理由 |
+|---|---|
+| 未定義 | |
+
+## 利用者B
+
+根拠件数 n = 0。確信度は未取得のため、像を書かない。
+EOF
+expect_ok "正しいペルソナは通る"
+
+JOURNEY="$PD/specs/02-requirements/journeys.md"
+
+# 計測と切り離された「絵」
+cat > "$JOURNEY" <<'EOF'
+# ジャーニー
+
+## 流れ
+
+| # | ステップ |
+|---|---|
+| 1 | 開く |
+EOF
+expect "ジャーニーと計測の分離" "主要タスク時間との対応が無い"
+expect "ジャーニーの対象ペルソナの欠落" "対象ペルソナの指定が無い"
+expect "ジャーニーの根拠の欠落" "「一次情報なし」も無い"
+
+# 所要時間を空欄のまま置く（それらしい数字も未取得も無い）
+cat > "$JOURNEY" <<'EOF'
+# ジャーニー
+
+対象ペルソナ: 利用者A
+主要タスク時間 = 探す + 決める
+
+| # | ステップ | 根拠 | 所要時間 |
+|---|---|---|---|
+| 一 | 探す | VOICE-〇〇〇 | |
+EOF
+expect "ジャーニーの所要時間の空欄" "値も「未取得」も無い"
+
+cat > "$JOURNEY" <<'EOF'
+# ジャーニー
+
+対象ペルソナ: 利用者A
+主要タスク時間 = 探す + 決める
+
+| # | ステップ | 根拠 | 所要時間 |
+|---|---|---|---|
+| 1 | 探す | VOICE-001 | 未取得 |
+| 2 | 決める | 一次情報なし | 未取得 |
+EOF
+expect_ok "正しいジャーニーは通る"
+
+SCREEN="$PD/specs/04-skeleton/screens/list.md"
+
+# 空振り状態の欠落（最も多い事故）と、表層の値の直書き
+cat > "$SCREEN" <<'EOF'
+# 一覧
+
+## 顧客ボイス
+
+VOICE-001 を引き当てた。
+
+## 状態設計
+
+| 状態 | 設計 |
+|---|---|
+| 初期 | |
+| 処理中 | |
+| 成功 | |
+| エラー | |
+
+## 表層
+
+見出しの色は #1a1a1a。
+EOF
+expect "画面仕様の空振り状態の欠落" "空振り"
+expect "画面仕様への色の直書き" "色の値を画面仕様に直書き"
+
+cat > "$SCREEN" <<'EOF'
+# 一覧
+
+## 顧客ボイス
+
+引き当て0件のため一次情報なし。改善案はデザイナー起案。
+
+## 状態設計
+
+| 状態 | 設計 |
+|---|---|
+| 初期 | |
+| 処理中 | |
+| 成功 | |
+| 空振り | 0件のときの文言を出す |
+| エラー | |
+
+## 表層
+
+使用トークン: color.text.default
+EOF
+expect_ok "正しい画面仕様は通る"
+
+TOKENS="$PD/specs/05-surface/design-tokens.md"
+
+cat > "$TOKENS" <<'EOF'
+# デザイントークン
+
+| トークン名 | 値 |
+|---|---|
+| color.text.default | #111111 |
+EOF
+expect "トークンの真実の源の欠落" "真実の源"
+expect "トークンの逸脱一覧の欠落" "逸脱一覧が無い"
+
+cat > "$TOKENS" <<'EOF'
+# デザイントークン
+
+真実の源: tokens.css
+
+| トークン名 | 値 |
+|---|---|
+| color.text.default | #111111 |
+
+## 逸脱一覧
+
+| 箇所 | 内容 | 期限 |
+|---|---|---|
+| 一覧の補助文言 | 下限割れ | 未定 |
+EOF
+expect "期限の無い逸脱" "期限の無い例外は恒久化する"
+
+cat > "$TOKENS" <<'EOF'
+# デザイントークン
+
+真実の源: tokens.css
+
+| トークン名 | 値 |
+|---|---|
+| color.text.default | #111111 |
+
+## 逸脱一覧
+
+| 箇所 | 内容 | 期限 |
+|---|---|---|
+| 一覧の補助文言 | 下限割れ | 2026-09-30 |
+EOF
+expect_ok "正しいトークン台帳は通る"
+
+# specs は現在値。ここで作った検証用の成果物は残さない
+rm -rf "$PD/specs"
+
 # ---------------------------------------------------------------- 予測データ
 
 mkdir -p "$PD/simulations/testprod/2026"
@@ -597,6 +838,21 @@ cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
 sed_replace "$PLUGIN/scripts/hook.py" "update_check" "nothing_at_all"
 expect_plugin "起動時の更新の案内の消失" "更新の案内が消えている"
 cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
+
+# スキルの形。スキルが増えるほど担当の重なりが事故になるため、
+# 個々の名前ではなく形（SKILL.md がある / 役割分界の表がある）を守る。
+mkdir -p "$PLUGIN/skills/ghost-skill"
+expect_plugin "SKILL.md の無いスキル" "skills/ghost-skill/SKILL.md: 無い"
+rm -rf "$PLUGIN/skills/ghost-skill"
+
+sed_replace "$PLUGIN/skills/ux-layer-triage/SKILL.md" "役割分界" "やること"
+expect_plugin "役割分界の表の消失" "役割分界の表が無い"
+cp "$ROOT/skills/ux-layer-triage/SKILL.md" "$PLUGIN/skills/ux-layer-triage/SKILL.md"
+
+sed_replace "$PLUGIN/skills/ux-journey-mapper/SKILL.md" \
+            "name: ux-journey-mapper" "name: journey"
+expect_plugin "スキル名とディレクトリ名の不一致" "ディレクトリ名"
+cp "$ROOT/skills/ux-journey-mapper/SKILL.md" "$PLUGIN/skills/ux-journey-mapper/SKILL.md"
 
 mv "$PLUGIN/scripts/hook.py" "$WORK/hook.py"
 expect_plugin "hook の入口の削除" "scripts/hook.py: 無い"

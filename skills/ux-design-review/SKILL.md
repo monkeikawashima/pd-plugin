@@ -13,6 +13,7 @@ description: 実装済み／実装直前の UI を、顧客ボイスと体験の
 | 顧客ボイスとの突合 | ボイスの記録（`user-voice-ledger`） |
 | 原則チェック | コントラストの検算（`a11y-contrast-guard`） |
 | 指摘の切り分け（課題 / 仮説） | 検証の実施設計（`ux-validation-planner`） |
+| — | **これから作る**画面の起草（`ux-screen-spec-writer`） |
 
 ## 手順
 

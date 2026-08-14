@@ -14,6 +14,7 @@ description: 色・コントラストの WCAG 2.1 検算を行い、基準を満
 | WCAG 検算と下限値の算出 | UI 全体の評価（`ux-design-review`） |
 | 色だけに依存した状態表現の検出 | 採用色の最終決定（**DESIGN の領域**） |
 | 逸脱表への追記 | 例外の記録（`ux-decision-record`） |
+| — | トークン台帳の所有（`design-token-keeper`） |
 
 ## 基準値（WCAG 2.1 AA）
 

@@ -13,6 +13,7 @@ description: 要望や課題を「〈アクター〉は、〈対象〉を〈で�
 | 体験の原則への紐づけ | 新規オブジェクトを立てる判断（`object-model-reviewer`） |
 | 既存ストーリーとの重複・矛盾の突合 | 生の声の保存（`user-voice-ledger`） |
 | 実装状況の判定と判定根拠の明示 | 決定の記録（`ux-decision-record`） |
+| — | 時間軸への分解（`ux-journey-mapper`） |
 
 **前提**: 層の判定は `ux-layer-triage` が済ませている。
 
