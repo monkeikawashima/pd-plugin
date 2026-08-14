@@ -1,6 +1,6 @@
 {
   "name": "pd",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Product Discovery & UI/UX Skill。KPI・利用状況・UX・効果検証から Root Cause と Driver を導き、Experiment と意思決定まで進める。顧客ボイス台帳、5段階の層の規律、アクセシビリティ検算、デザインレビューまで同梱。規約は同梱の検証器が機械的に判定する。",
   "author": {
     "name": "monkeikawashima"
