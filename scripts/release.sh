@@ -1,8 +1,9 @@
 #!/bin/sh
 # 版を上げて配る。3つのコマンドを1つに畳み、順序を間違えられなくする。
 #
-#     sh scripts/release.sh 0.4.0             コミット → タグ → push まで
-#     sh scripts/release.sh 0.4.0 --no-push   手元で止める（確認用）
+#     sh scripts/release.sh                   CHANGELOG の最新の見出しの版を配る
+#     sh scripts/release.sh 0.4.0             版を直接指定する
+#     sh scripts/release.sh --no-push         手元で止める（確認用）
 #
 # 未コミットのままタグを打つと、タグが古い内容を指す。これを3回続けたため、
 # 手順ではなく仕組みで止める。CHANGELOG は**実行前に**手で書いておくこと
@@ -14,17 +15,36 @@ set -e
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-VERSION=$1
-NOPUSH=$2
-
 die() { printf '\n✗ %s\n' "$1" >&2; exit 1; }
 step() { printf '\n▶ %s\n' "$1"; }
 
-# ------------------------------------------------------------------ 事前確認
+# 版を省略できる。CHANGELOG の一番新しい見出しを採る。
+# どの版にするかは CHANGELOG を書いた時点で人が決めている。
+# 同じ判断を2回させると、片方だけ間違える。
+VERSION=$1
+NOPUSH=$2
+case "$VERSION" in
+    --no-push) NOPUSH=--no-push; VERSION="" ;;
+esac
+
+if [ -z "$VERSION" ]; then
+    VERSION=$(python3 - <<'PY'
+import pathlib, re
+text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+found = re.findall(r"^## \[(\d+\.\d+\.\d+)\]", text, re.M)
+print(max(found, key=lambda v: tuple(int(n) for n in v.split("."))) if found else "")
+PY
+)
+    [ -n "$VERSION" ] || die "CHANGELOG.md に「## [x.y.z]」の見出しが無い。
+   配る版を決められない。先に CHANGELOG を書くか、版を直接渡す
+   （例: sh scripts/release.sh 1.2.0）"
+    printf 'CHANGELOG の最新の見出しから版を決めた: %s\n' "$VERSION"
+fi
 
 case "$VERSION" in
     [0-9]*.[0-9]*.[0-9]*) ;;
-    *) die "使い方: sh scripts/release.sh <版> [--no-push]   例) sh scripts/release.sh 0.4.0" ;;
+    *) die "使い方: sh scripts/release.sh [版] [--no-push]
+   版を省くと CHANGELOG の最新の見出しを使う" ;;
 esac
 
 CURRENT=$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json'))['version'])")

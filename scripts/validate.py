@@ -1180,6 +1180,21 @@ def check_version_consistency() -> None:
         err(changelog, f"{version} の項目が無い"
                        "（利用者が更新の内容を判断できない）")
 
+    # 逆向きの食い違い。履歴に新しい版を書いたのに plugin.json を上げていない状態は、
+    # 「書いたのに配っていない」。/plugin update しても "already at the latest version"
+    # で止まり、利用者には何も届かない。見た目は完成しているので気づけない。
+    if changelog.exists():
+        headings = re.findall(r"^## \[(\d+\.\d+\.\d+)\]",
+                              changelog.read_text(encoding="utf-8"), re.M)
+        if headings:
+            def parts(v: str) -> tuple:
+                return tuple(int(n) for n in v.split("."))
+            newest = max(headings, key=parts)
+            if parts(newest) > parts(version):
+                err(changelog, f"{newest} の項目があるのに plugin.json は {version} のまま"
+                               f"（書いたが配っていない）。"
+                               f"配るには sh scripts/release.sh を実行する")
+
     # pd-init が利用プロジェクトの CI に焼き込む版。古いまま配ると、
     # 初期状態から手元（最新）と CI（旧版）で判定が食い違う。
     init = PLUGIN_ROOT / "commands/init.md"
