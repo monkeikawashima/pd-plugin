@@ -4,11 +4,11 @@ Product Discovery Skill（`/pd:analyze`）の**配布物**。
 
 ```
 .claude-plugin/   marketplace / plugin 定義
-skills/analyze/        SKILL.md / framework/ / products/_template.md
+skills/           analyze（/pd:analyze）と UI/UX の各スキル
 hooks/            PostToolUse / Stop / SessionStart
-commands/         /pd:init  /pd:validate  /pd:uninstall
+commands/         /pd:init  /pd:validate  /pd:uninstall  /pd:update
 scripts/          validate.py（唯一の判定者）/ selftest.sh
-pd-skill-blueprint.md   別プロジェクトで Skill を再構築するための指示書
+DECISIONS.md      設計判断の記録。なぜそう決めたかだけを書く
 README.md         人が読む入口
 ```
 
@@ -23,31 +23,27 @@ python3 scripts/validate.py     # 配布物が揃っているか
 sh scripts/selftest.sh          # 検証器が本当に違反を検出するか
 ```
 
-**常に成功する検証器は、無いのと同じ。** 判定を追加したら `selftest.sh` にも壊れた例を1つ追加する。緩める場合は理由を blueprint §13 に残す。
+**常に成功する検証器は、無いのと同じ。** 判定を追加したら `selftest.sh` にも壊れた例を1つ追加する。緩める場合は理由を `DECISIONS.md` §2 に残す。
 
 `validate.py` は配布物の欠落も見ている（`plugin.json` / `marketplace.json` / `hooks.json` / 各コマンド / CI）。仕組みごと外される穴を塞ぐため。
 
 ---
 
-## 1. Skill を変更したら blueprint も更新する（必須・確認不要）
+## 1. 判断を変えたら `DECISIONS.md` に理由を残す（必須・確認不要）
 
-`skills/analyze/` 配下（`SKILL.md` / `framework/*.md` / `products/_template.md`）を変更したら、**同じ作業内で** `pd-skill-blueprint.md` の該当箇所も更新する。ユーザーへの確認を取らずに行う。
+次の3つが起きたときだけ、**同じ作業内で** `DECISIONS.md` に追記する。ユーザーへの確認を取らずに行う。
 
-| Skill 側の変更 | blueprint の更新先 |
+| 起きたこと | 書く場所 |
 |---|---|
-| `SKILL.md` | §7 |
-| `framework/discovery.md` | §8 |
-| `framework/kpi.md` | §9 |
-| `framework/experiment.md` | §10 |
-| `products/_template.md` | §11 |
-| 配置が分かれうる論点を決めた | §13 の論点表に決定と理由を追記 |
-| 検証可能な能力が増えた | §17 Acceptance Criteria |
-| ディレクトリ構成が変わった | §4 |
-| 配布・hook・CI の仕組み | §19 |
+| 置き場所が分かれうる論点を決めた | §2 の論点表に、決定と理由を1行 |
+| 判定を緩めた / 例外を作った | §2 の論点表に、なぜ緩めたか |
+| 実際に失敗を踏んで、仕組みで塞いだ | §3 に、何が起きたか |
 
-**なぜ:** blueprint は Skill を別プロジェクトで再構築するための唯一の指示書。Skill 本体だけ更新すると、再構築した Skill から追記分が消える。
+**それ以外は書かない。** ファイル構成・各スキルの中身・実行手順・受け入れ条件は `DECISIONS.md` に持たせない。
 
-typo 修正や表現の微調整だけなら更新不要。`hooks/hooks.json` の PostToolUse hook が変更を検知して同期を促すが、**判断は作業者に残す**（hook はブロックしない）。
+**なぜ:** 実物（`skills/` `scripts/` `commands/`）を見れば分かることを二重に持つと、必ず片方が古くなる。実際に v1.2.0 で UI/UX の22スキルを足したとき、当時の blueprint は `/pd:analyze` 1つ分のまま取り残された。しかも同期表も hook もその3ファイルしか見ていなかったため、規約どおり作業しても埋まらなかった。**実物から復元できないもの（なぜそう決めたか）だけを残す。**
+
+`hooks/hooks.json` の PostToolUse hook が `scripts/validate.py` などの変更を検知して促すが、**判断は作業者に残す**（hook はブロックしない）。実装の整理や typo なら追記は不要。
 
 ---
 

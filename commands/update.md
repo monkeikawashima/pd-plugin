@@ -1,9 +1,17 @@
 ---
 description: pd plugin を最新版に更新する（配布元の取り直しと更新をまとめて行う）
-allowed-tools: Bash(claude plugin *)
+allowed-tools: Bash(claude plugin *), Bash(python3 *)
 ---
 
 # pd-update
+
+**まず、起動時の更新確認が止められていないかを見る。**
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/update_check.py" status
+```
+
+何か出力されたら、そのまま利用者に伝えてから先へ進む。**止めていること自体は妨げない** — 手動更新はできる。黙って進めると、案内が出ない理由が分からないままになる。
 
 **配布元の一覧を取り直してから更新する。** この順序でないと更新されない。
 

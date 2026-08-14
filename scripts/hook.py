@@ -34,19 +34,44 @@ MARKER = Path("pd") / "ledger.json"
 WATCHED = ("analyses", "voices", "simulations", "products")
 BASE_DIR = "pd"
 
-# 変更したら pd-skill-blueprint.md の同期が要るファイル（plugin 側）
-SKILL_PARTS = (
-    "skills/analyze/SKILL.md",
-    "skills/analyze/framework/",
-    "skills/analyze/products/_template.md",
+# 判断そのものを変えうるファイル（plugin 側）。ここを触ったときだけ
+# DECISIONS.md を促す。**中身の再掲は促さない** — 実物と重複する記述を
+# 持たせると、必ず片方が古くなる（v1.2.0 で実際に起きた。DECISIONS.md 冒頭）。
+DECISION_PARTS = (
+    "scripts/validate.py",
+    "scripts/hook.py",
+    "hooks/hooks.json",
+    "scripts/release.sh",
 )
 
-SYNC_MESSAGE = (
-    "pd Skill を変更しました。同じターン内で pd-skill-blueprint.md の該当セクション"
-    "（該当ファイルの「書くこと」/ §13 論点表 / §17 Acceptance Criteria）を更新して"
-    "ください。加えて、利用者の操作・置き場所・守るべきルール・用語が変わった場合は"
-    "README.md も更新してください。ユーザー確認は不要です。"
+# 利用者から見える振る舞いが変わりうるファイル。README の同期を促す。
+README_PARTS = (
+    "skills/",
+    "commands/",
 )
+
+DECISION_MESSAGE = (
+    "pd の判定・仕組みを変更しました。次のどれかに当たる場合、同じターン内で "
+    "DECISIONS.md に理由を追記してください — ①置き場所が分かれうる論点を決めた "
+    "②判定を緩めた / 例外を作った ③実際に失敗を踏んで仕組みで塞いだ。"
+    "どれにも当たらない変更（実装の整理・typo）なら追記は不要です。"
+    "判定を追加したなら scripts/selftest.sh に壊れた例を1つ足してください。"
+    "ユーザー確認は不要です。"
+)
+
+README_MESSAGE = (
+    "pd の配布物を変更しました。利用者の操作・置き場所・守るべきルール・用語が"
+    "変わった場合は、同じターン内で README.md も更新してください。"
+    "変わっていなければ不要です。ユーザー確認は不要です。"
+)
+
+
+def plugin_relative(raw: str) -> str | None:
+    """編集されたファイルが plugin 自身のものなら、plugin からの相対パスを返す。"""
+    try:
+        return Path(raw).resolve().relative_to(PLUGIN_ROOT).as_posix()
+    except (ValueError, OSError):
+        return None
 
 
 def project_dir() -> Path | None:
@@ -85,15 +110,23 @@ def post_tool_use(event: dict) -> None:
     raw = edited_path(event)
     if not raw:
         return
-    # Windows の区切りを吸収してから照合する
-    posix = Path(raw).as_posix()
 
-    if any(posix.endswith(p) or p in posix for p in SKILL_PARTS):
-        emit({"hookSpecificOutput": {
-            "hookEventName": "PostToolUse",
-            "additionalContext": SYNC_MESSAGE,
-        }})
-        return
+    # 促しの対象は plugin 自身を編集したときだけ。利用プロジェクトにも
+    # `skills/` や `commands/` はありうるため、部分一致では誤検知する。
+    inside = plugin_relative(raw)
+    if inside:
+        if any(inside.startswith(p) for p in DECISION_PARTS):
+            emit({"hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "additionalContext": DECISION_MESSAGE,
+            }})
+            return
+        if any(inside.startswith(p) for p in README_PARTS):
+            emit({"hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "additionalContext": README_MESSAGE,
+            }})
+            return
 
     root = project_dir()
     if not is_pd_project(root):

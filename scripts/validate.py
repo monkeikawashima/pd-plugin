@@ -161,7 +161,7 @@ IMMUTABLE_DIRS = ("analyses", "voices", "simulations",
 RULES_FROM = "2026-08-12"
 
 # 規約の追加より前に書かれた Note。日付では分けられないため明示的に除外する
-# （追加日と同じ日に既存と新規が混在するため。理由は pd-skill-blueprint.md §13）
+# （追加日と同じ日に既存と新規が混在するため。理由は DECISIONS.md §2）
 # 現在は対象なし（該当した Note は削除済み）
 LEGACY_NOTES: set[str] = set()
 
@@ -967,6 +967,7 @@ def check_plugin_guards() -> None:
         check_hook_portability(hooks_file)
 
     check_hook_entrypoint()
+    check_update_optout()
     check_command_names()
     check_plugin_is_generic()
     check_documented_paths()
@@ -1092,7 +1093,7 @@ BARE_COMMAND = re.compile(
 RENAMED = {"pd": "analyze", "pd-init": "init",
            "pd-validate": "validate", "pd-uninstall": "uninstall"}
 
-DOCS = ["README.md", "CLAUDE.md", "pd-skill-blueprint.md",
+DOCS = ["README.md", "CLAUDE.md", "DECISIONS.md",
         "commands/init.md", "commands/validate.md",
         "commands/uninstall.md", "commands/update.md",
         "skills/analyze/SKILL.md"]
@@ -1135,12 +1136,31 @@ def check_hook_entrypoint() -> None:
     if "ledger.json" not in body:
         err(entry, "pd プロジェクトの目印の判定が無い"
                    "（pd を使わないプロジェクトでも動いてしまう）")
-    if "pd-skill-blueprint.md" not in body:
-        err(entry, "blueprint / README 同期の促しが消えている")
+    if "DECISIONS.md" not in body:
+        err(entry, "設計判断の記録（DECISIONS.md）の促しが消えている")
     # 更新は放っておくと届かない（サードパーティの配布元は既定で自動更新されない）。
     # 起動時に知らせないと、手元だけ古いまま CI と判定が食い違う。
     if "update_check" not in body:
         err(entry, "起動時の更新の案内が消えている（利用者に新しい版が届かない）")
+
+
+def check_update_optout() -> None:
+    """起動時の外部通信を、利用者が恒久的に止められるか。
+
+    plugin の外に入口が無いと、止める手段は hooks.json の編集しか残らず
+    `/plugin update` のたびに黙って復活する。SECURITY.md はこの入口を
+    利用者に約束しているため、消えると文書が嘘になる。
+    """
+    checker = PLUGIN_ROOT / "scripts/update_check.py"
+    if not checker.exists():
+        return
+    if "PD_UPDATE_CHECK" not in checker.read_text(encoding="utf-8"):
+        err(checker, "更新確認を止める入口が無い"
+                     "（plugin の外から止められないと /plugin update で復活する）")
+    security = PLUGIN_ROOT / "SECURITY.md"
+    if security.exists() and "PD_UPDATE_CHECK" not in security.read_text(encoding="utf-8"):
+        err(security, "更新確認の止め方が書かれていない"
+                      "（止められることを知らせないと、無いのと同じ）")
 
 
 def check_version_consistency() -> None:

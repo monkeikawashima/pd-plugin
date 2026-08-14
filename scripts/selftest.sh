@@ -949,13 +949,23 @@ sed_replace "$PLUGIN/scripts/hook.py" "ledger.json" "marker.json"
 expect_plugin "pd プロジェクト判定の消失" "目印の判定が無い"
 cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
 
-sed_replace "$PLUGIN/scripts/hook.py" "pd-skill-blueprint.md" "somewhere-else.md"
-expect_plugin "blueprint 同期の促しの消失" "同期の促しが消えている"
+sed_replace "$PLUGIN/scripts/hook.py" "DECISIONS.md" "somewhere-else.md"
+expect_plugin "設計判断の記録の促しの消失" "促しが消えている"
 cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
 
 sed_replace "$PLUGIN/scripts/hook.py" "update_check" "nothing_at_all"
 expect_plugin "起動時の更新の案内の消失" "更新の案内が消えている"
 cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
+
+# 止める手段が消えると、残るのは hooks.json を編集する方法だけになり、
+# /plugin update のたびに黙って外部通信が復活する。SECURITY.md の約束も嘘になる。
+sed_replace "$PLUGIN/scripts/update_check.py" "PD_UPDATE_CHECK" "PD_SOMETHING_ELSE"
+expect_plugin "更新確認を止める入口の消失" "止める入口が無い"
+cp "$ROOT/scripts/update_check.py" "$PLUGIN/scripts/update_check.py"
+
+sed_replace "$PLUGIN/SECURITY.md" "PD_UPDATE_CHECK" "どこにも書かない"
+expect_plugin "止め方の案内の消失" "止め方が書かれていない"
+cp "$ROOT/SECURITY.md" "$PLUGIN/SECURITY.md"
 
 # スキルの形。スキルが増えるほど担当の重なりが事故になるため、
 # 個々の名前ではなく形（SKILL.md がある / 役割分界の表がある）を守る。
@@ -1141,6 +1151,16 @@ hook_case() {   # $1 = ラベル / $2 = event / $3 = 入力JSON / $4 = 期待（
         printf '  ✗ %s — 期待 %s / 実際 %s\n' "$1" "$4" "$out"; fail=$((fail + 1))
     fi
 }
+
+# 促しの宛先。判定を触ったら理由を残させ、配布物を触ったら README を促す。
+# **plugin 自身のパスに限る** — 利用プロジェクトにも skills/ はありうるため、
+# 部分一致で拾うと無関係な編集のたびに促しが出て、やがて無視される。
+hook_case "判定を触ったら理由を促す" post-tool-use \
+          "{\"tool_input\":{\"file_path\":\"$PLUGIN/scripts/validate.py\"}}" "DECISIONS.md"
+hook_case "配布物を触ったら README を促す" post-tool-use \
+          "{\"tool_input\":{\"file_path\":\"$PLUGIN/skills/ux-design-review/SKILL.md\"}}" "README.md"
+hook_case "他リポジトリの skills/ では促さない" post-tool-use \
+          '{"tool_input":{"file_path":"/tmp/pd-selftest-other/skills/x/SKILL.md"}}' ""
 
 BADFILE="$PD/analyses/testprod/2026/bad-name.md"
 printf '中身\n' > "$BADFILE"

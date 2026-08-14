@@ -30,6 +30,17 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = PLUGIN_ROOT / ".claude-plugin/plugin.json"
 
+# 更新確認を止める入口。**plugin の外に置く** — hooks.json の SessionStart を
+# 外す方法しか無いと、`/plugin update` のたびに黙って復活する（v1.2.1 まで
+# SECURITY.md がその手段を案内していた）。環境変数なら shell の rc にも
+# .claude/settings.json の env にも書け、plugin を入れ替えても残る。
+DISABLE_ENV = "PD_UPDATE_CHECK"
+DISABLE_VALUES = ("0", "false", "off", "no")
+
+
+def disabled() -> bool:
+    return (os.environ.get(DISABLE_ENV) or "").strip().lower() in DISABLE_VALUES
+
 # 問い合わせる間隔。毎起動で叩くと API の制限に当たるうえ、版はそう頻繁には出ない。
 TTL_SECONDS = 6 * 60 * 60
 TIMEOUT_SECONDS = 8
@@ -112,6 +123,8 @@ def fetch() -> None:
 
     時刻を進めるのは、圏外のときに起動のたび問い合わせを撃ち続けないため。
     """
+    if disabled():
+        return          # 裏で起動された後で無効化された場合も、ここで通信しない
     data = read_cache()
     data["checked_at"] = int(time.time())
 
@@ -152,6 +165,8 @@ def spawn_fetch() -> None:
 
 def notice() -> str | None:
     """新しい版があるときだけ、そのまま画面に出せる文面を返す。"""
+    if disabled():
+        return None     # 通信しないだけでなく、キャッシュ由来の案内も出さない
     current = manifest().get("version")
     if not current:
         return None
@@ -206,8 +221,15 @@ def main() -> int:
         text = notice()
         if text:
             sys.stdout.write(text)
+    elif action == "status":
+        # 黙って無効になっていると、更新が無いのか止めているのか区別できない。
+        # /pd:update から呼び、止めている場合はその旨を伝えてから更新へ進む。
+        if disabled():
+            sys.stdout.write(
+                f"更新確認は無効です（{DISABLE_ENV}={os.environ.get(DISABLE_ENV)}）。"
+                "起動時の案内は出ませんが、手動の更新はこのまま実行できます。")
     else:
-        print("使い方: update_check.py {notify | fetch}", file=sys.stderr)
+        print("使い方: update_check.py {notify | fetch | status}", file=sys.stderr)
         return 2
     return 0
 
