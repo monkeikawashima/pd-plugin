@@ -9,7 +9,7 @@
       "name": "pd",
       "source": "./",
       "description": "Product Discovery と UI/UX の統合 Skill（/pd:analyze）。顧客ボイス台帳・層の規律・デザインレビューを含み、規約は同梱の検証器が機械的に判定する",
-      "version": "1.4.0"
+      "version": "1.5.0"
     }
   ]
 }
