@@ -1,0 +1,36 @@
+name: release
+#
+# タグが push されたら GitHub Release を作る。
+#
+# なぜ workflow なのか。Release の本文は起動時の更新通知（update_check.py）に出るため、
+# 「作り忘れた版」は利用者に何が変わったか届かない。release.sh も作成を試みるが、
+# あれは `--no-push` で止めた場合や、手で `git push origin vX` した場合には走らない。
+# **タグの push という1点に寄せれば、どの経路で配っても必ず作られる。**
+#
+# 実際に v1.4.0 で漏れた（--no-push で止め、あとから手で push したため）。
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 既にある場合は何もしない（release.sh が先に作っていることがある）
+      - name: GitHub Release を作る
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "既にある: $TAG"
+            exit 0
+          fi
+          python3 scripts/changelog_section.py "${TAG#v}" > /tmp/notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md

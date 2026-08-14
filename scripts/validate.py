@@ -308,15 +308,130 @@ def applies(path: Path, fm: dict[str, str]) -> bool:
     return fm.get("date", "") >= RULES_FROM
 
 
-def required_segments(product: str) -> list[str]:
+OPEN_CLOSE = {"（": "）", "(": ")", "「": "」", "『": "』", "[": "]", "{": "}"}
+
+
+def _split_top_level(body: str) -> list[str]:
+    """旧形式の1行定義を軸ごとに切る。**括弧の内側では切らない。**
+
+    切るのは `・` `、` `／` だけ。**ASCII の `/` では切らない** — `新規/既存` のように
+    軸の名前そのものに含まれるのが普通で、切ると「新規」「既存」という別々の軸に
+    なってしまう（旧実装はこれをやっていた）。
+
+    括弧を無視した分割も同じ壊れ方をする。`店舗セグメント（A 小規模 / B 比率高）` が
+    「店舗セグメント（A 小規模」と「B 比率高）」に割れる。**割れた文字列は本文の
+    どこにも現れないので、この書き方をした定義は原理的に通らなくなる。**
+
+    そもそも区切り文字を推測しているのが弱点なので、新しくは frontmatter の
+    構造化リストで宣言する（_segments_from_frontmatter）。
+    """
+    out, buf, stack = [], "", []
+    for ch in body:
+        if ch in OPEN_CLOSE:
+            stack.append(OPEN_CLOSE[ch])
+        elif stack and ch == stack[-1]:
+            stack.pop()
+        if not stack and ch in "・、／":
+            out.append(buf)
+            buf = ""
+            continue
+        buf += ch
+    out.append(buf)
+    return [t.strip() for t in out if t.strip()]
+
+
+def _segments_from_frontmatter(text: str) -> list[dict[str, str]]:
+    """frontmatter の構造化リストから読む（v1.5.0〜）。
+
+        segments:
+          - id: store_segment
+            label: 店舗セグメント
+            values: [A 小規模, B インバウンド比率高]
+
+    区切り文字を推測しなくてよくなるのが本質。`values` に `/` が入っていても壊れない。
+    """
+    if not text.startswith("---"):
+        return []
+    end = text.find("\n---", 3)
+    if end == -1:
+        return []
+    out: list[dict[str, str]] = []
+    inside = False
+    for line in text[3:end].split("\n"):
+        stripped = line.strip()
+        if not inside:
+            if stripped == "segments:":
+                inside = True
+            continue
+        if stripped and not line.startswith((" ", "\t", "-")):
+            break                      # 次のキーに移った
+        if stripped.startswith("- "):
+            out.append({"id": "", "label": ""})
+            stripped = stripped[2:].strip()
+        if out and ":" in stripped:
+            k, v = stripped.split(":", 1)
+            if k.strip() in ("id", "label"):
+                out[-1][k.strip()] = v.strip()
+    return [s for s in out if s["label"] or s["id"]]
+
+
+def required_segments(product: str) -> list[dict[str, str]]:
+    """この Note が分解を宣言すべき Segment。id と label の組で返す。"""
     f = PRODUCTS_DIR / f"{product}.md"
     if not f.exists():
         return []
-    for line in f.read_text(encoding="utf-8").split("\n"):
+    text = f.read_text(encoding="utf-8")
+    segs = _segments_from_frontmatter(text)
+    if segs:
+        for s in segs:
+            s.setdefault("id", "")
+            s["label"] = s["label"] or s["id"]
+        return segs
+    # 旧形式（`必須 Segment: A・B・C` の1行）。既存プロジェクトを読めなくしない。
+    for line in text.split("\n"):
         if line.strip().startswith("必須 Segment:"):
             body = line.split(":", 1)[1]
-            return [t.strip() for t in re.split(r"[・/／]", body) if t.strip()]
+            return [{"id": "", "label": t} for t in _split_top_level(body)]
     return []
+
+
+# 分解できなかったことを宣言する語。**「引けない」を正規の状態として認める。**
+# ペルソナ（未取得）・ジャーニー（一次情報なし）・画面仕様（デザイナー起案）に
+# 既にある考え方で、Segment だけこれが無かった。
+SEGMENT_UNKNOWN = ("Unknown", "未計測", "未取得", "不明", "引けない",
+                   "分解できな", "分解していな")
+
+
+def segment_declarations(text: str) -> list[tuple[str, str]]:
+    """表の行・見出しという「宣言の位置」だけを拾う。
+
+    散文の substring マッチをやめる理由。あれが測っていたのは**語が本文のどこかに
+    出現するか**であって、分解されたかではない。だから両方向に外れた。
+
+    - 偽陰性 — 「経過月数では分解できていない」という否定文でも通ってしまう
+    - 偽陽性 — 誠実に「データが無いので分解できない」と書いた Note が落ちる
+
+    後者が起きると、語を1つ本文に置けば警告が消える。**それは規律ではなく作文になる。**
+    """
+    out: list[tuple[str, str]] = []
+    for line in text.split("\n"):
+        s = line.strip()
+        if s.startswith("|"):
+            if TABLE_SEPARATOR.match(line):
+                continue
+            cells = [c.strip() for c in s.strip("|").split("|")]
+            if cells:
+                out.append((cells[0], " ".join(cells[1:])))
+        elif s.startswith("#"):
+            out.append((s.lstrip("#").strip(), ""))
+    return out
+
+
+def _has_reason(rest: str) -> bool:
+    """「引けない」の宣言に、理由が添えられているか。"""
+    for word in SEGMENT_UNKNOWN:
+        rest = rest.replace(word, "")
+    return len(rest.strip(" 　-—–|/・:：")) > 0
 
 
 def known_products() -> set[str]:
@@ -458,9 +573,20 @@ def check_new_rules(path: Path, text: str, fm: dict[str, str]) -> None:
         err(path, "棄却条件に観測可能な閾値が無い（数値・比較で書く。暫定なら明示する）", i)
 
     # ⑤ 必須 Segment（警告）
-    segs = required_segments(fm.get("product", ""))
-    if segs and not any(sg in text for sg in segs):
-        warn(path, f"必須 Segment（{' / '.join(segs)}）での分解が見当たらない")
+    # 沈黙している Note だけを警告する。分解できないことを理由つきで宣言した Note は
+    # 通す — 誠実な文書と手抜きの文書を、判定器が区別できるようにするため。
+    for sg in required_segments(fm.get("product", "")):
+        keys = [k for k in (sg["label"], sg.get("id", "")) if k]
+        hit = next(((head, rest) for head, rest in segment_declarations(text)
+                    if any(k in head for k in keys)), None)
+        if hit is None:
+            warn(path, f"必須 Segment「{sg['label']}」の宣言が無い"
+                       f"（分解した結果か、引けない理由かを表の行として書く。"
+                       f"散文で触れるだけでは分解したことにならない）")
+        elif any(u in hit[1] for u in SEGMENT_UNKNOWN) and not _has_reason(hit[1]):
+            warn(path, f"必須 Segment「{sg['label']}」が引けないとだけ書かれている"
+                       f"（なぜ引けないか / いつ引けるようになるかを添える。"
+                       f"理由の無い Unknown は、次に誰も追えない）")
 
     # ⑦ 出典と分量（警告）
     for name, body in secs.items():
@@ -758,8 +884,29 @@ def check_review(path: Path) -> None:
 
 # 反例として並べている行は対象外にする（禁止例を書いた文書が落ちるため）。
 # COUNTER_EXAMPLE と同じ役割だが、あちらは配布物向けで定義がこの下にあるため分ける。
+#
+# **これは値の検査（HEX）専用の除外にする。** 語彙の検査（呼称・装飾属性）では
+# use/mention（下）で判定する。理由は _is_mention の説明を見る。
 SPEC_COUNTER = ("✗", "❌", "書かない", "書かず", "禁止",
                 "記載しない", "持たせない", "混ぜない")
+
+
+def _is_mention(line: str, word: str) -> bool:
+    """その行は語を「使って」いるのか、「言及して」いるだけか。
+
+    規約文・用語定義・反例は、対象語を**引用して**書く（「ユーザー」を単独で使わない）。
+    実際に曖昧な使い方をしている文は引用しない（ユーザーが不便）。**この非対称性は
+    語尾の表現に依存しない。**
+
+    かつては禁止表現の語彙（SPEC_COUNTER）を当てにいっていたが、日本語の否定表現は
+    閉じた集合ではない。「書かない」を入れても「使わない」で漏れ、次は「用いない」
+    「避ける」「控える」「非推奨」で漏れる。**リストに1語足す対処はモグラ叩きになる。**
+    実際に glossary.md（呼称を決める当のファイル）が「使わない」で漏れて落ちていた。
+
+    値の検査には持ち込まない。design-tokens.md では `#7c3aed` とバッククォート付きで
+    色値を書くのが普通で、HEX の検査に引用除外を入れると検査が効かなくなる。
+    """
+    return re.search(rf"[「『\"'`]\s*{re.escape(word)}\s*[」』\"'`]", line) is not None
 
 # 検証されていない断定が、検証済みの記述と同じ見た目で混ざる属性。
 # **警告に留める**（業種によっては正当な分解軸になりうる。誤検知で判定器全体が
@@ -790,10 +937,8 @@ def check_personas(path: Path) -> None:
                   "非対象が空のペルソナは、全員を指しているのと同じ")
 
     for i, line in enumerate(text.split("\n"), 1):
-        if any(c in line for c in SPEC_COUNTER):
-            continue
         for word in DECORATION:
-            if word in line:
+            if word in line and not _is_mention(line, word):
                 warn(path, f"装飾属性「{word}」がある（判断に効かず、"
                            f"検証されていない断定が混ざる）", i)
                 break
@@ -889,11 +1034,18 @@ def check_spec(path: Path) -> None:
 # （文脈によっては一般論として正しく、誤検知で判定器全体が無視されるほうが損失が大きい）。
 BARE_USER = re.compile(r"ユーザー(?=[はがをにのもとやへ、。）」\]]|\s|$)")
 
+# 呼称を定義する当のファイル。定義には対象語そのものの記載が要る。
+# **規約を所有するファイルを、その規約で裁かない。** 警告文自身がこのファイルを
+# 「呼称を決める場所」と名指ししており、そこが落ちるのは自己言及の矛盾になる。
+NAMING_AUTHORITY = "specs/01-strategy/glossary.md"
+
 
 def check_naming(path: Path) -> None:
     """呼称。どの利用者系統の話かを省いていないか。"""
+    if rel_to_base(path) == NAMING_AUTHORITY:
+        return
     for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
-        if any(c in line for c in SPEC_COUNTER):
+        if _is_mention(line, "ユーザー"):
             continue
         if BARE_USER.search(line):
             warn(path, "「ユーザー」を単独で使っている。どの利用者系統かを指定する"
@@ -941,6 +1093,9 @@ PLUGIN_FILES = [
     "skills/analyze/SKILL.md",
     "skills/analyze/products/_template.md",
     ".github/workflows/validate.yml",
+    # タグの push で Release を作る。無いと、`--no-push` や手動 push で配った版の
+    # 本文が起動時の更新通知に出ない（v1.4.0 で実際に漏れた）
+    ".github/workflows/release.yml",
     "CHANGELOG.md",
 ]
 

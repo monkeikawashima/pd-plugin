@@ -116,6 +116,8 @@ git --no-pager log --oneline -1
 if [ "$NOPUSH" = "--no-push" ]; then
     printf '\n手元で止めた（--no-push）。配るには次を実行する:\n'
     printf '    git push && git push origin v%s\n' "$VERSION"
+    printf '  GitHub Release は tag の push で自動作成される'
+    printf '（.github/workflows/release.yml）\n'
     exit 0
 fi
 

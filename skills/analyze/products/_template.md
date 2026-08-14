@@ -70,13 +70,26 @@
 
 ### 必須 Segment
 
-分析のたびに切り口を場当たりに決めないため、**このプロダクトで必ず見る Segment** を固定する。1行で書く。
+分析のたびに切り口を場当たりに決めないため、**このプロダクトで必ず見る Segment** を固定する。**このファイルの frontmatter に書く。**
 
-```
-必須 Segment: 新規/既存 ・ 利用頻度 ・ 導入からの経過月数
+```yaml
+---
+segments:
+  - id: tenure
+    label: 新規/既存
+    values: [新規, 既存]
+  - id: usage_frequency
+    label: 利用頻度
+  - id: months_since_onboarding
+    label: 導入からの経過月数
+---
 ```
 
 意味のある軸だけを置く。分解できない軸を並べない。
+
+`values` に `/` や `・` が入っていてもよい。**区切り文字を検証器に推測させないため、1行に詰めずリストで宣言する。** 旧形式（`必須 Segment: A ・ B` の1行）も読めるが、括弧つきの値を書くと壊れる。
+
+Note 側は、この各 Segment について**表の行として**状態を宣言する（`skills/analyze/framework/kpi.md`）。分解できない場合も、理由を添えれば通る。
 
 
 ## User Journey

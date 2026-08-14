@@ -56,6 +56,24 @@ expect_plugin() {
 
 prune() { PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" --accept >/dev/null 2>&1 || true; }
 
+# 誤検知していないこと（このメッセージが出てはいけない）
+expect_no() {   # $1 = ラベル / $2 = 出てはいけないメッセージ
+    if PD_PROJECT_DIR="$PROJ" python3 "$VALIDATE" 2>&1 | grep -q "$2"; then
+        printf '  ✗ %s — 誤検知した（%s）\n' "$1" "$2"; fail=$((fail + 1))
+    else
+        printf '  ✓ %s\n' "$1"; pass=$((pass + 1))
+    fi
+}
+
+sed_replace() {   # $1 = ファイル / $2 = 置換前 / $3 = 置換後
+python3 - "$1" "$2" "$3" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+p.write_text(p.read_text(encoding='utf-8').replace(sys.argv[2], sys.argv[3]),
+             encoding='utf-8')
+PY
+}
+
 # ------------------------------------------------------------ プロジェクトを作る
 
 mkdir -p "$PD/products" "$PD/analyses/testprod/2026" "$PROJ/pd" \
@@ -132,7 +150,11 @@ status:    完了
 > \`Hypothesis\` まだ確かめていない考え ／ \`Unknown\` 分からない
 
 ## 現状
-新規/既存 の別で見た（\`Fact\`）。
+
+| Segment | 状態 | 内容 / 引けない理由 |
+|---|---|---|
+| 新規/既存 | 分解済み | 継続率 62% / 81%（\`Fact\`） |
+| 利用頻度 | 分解済み | 週1以上 74%（\`Fact\`） |
 EOF
 }
 
@@ -226,6 +248,78 @@ expect "### 見出しの言い換え漏れ" "見出しに日本語の言い換�
 new_note '## Evidence（根拠）
 全体の平均だけを見た（`Fact`。出典: 集計）。'
 expect "必須 Segment の未分解（警告）" "必須 Segment"
+
+# 散文で語に触れただけでは分解したことにならない。
+# 旧実装は「本文のどこかに語が出現するか」を見ていたので、**否定文でも通っていた。**
+new_note '## Evidence（根拠）
+新規/既存 と 利用頻度 では分解できていない（`Fact`。出典: 集計）。'
+expect "散文で触れただけの Segment（偽陰性）" "「新規/既存」の宣言が無い"
+
+# 表の行として宣言すれば通る
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 / 引けない理由 |
+|---|---|---|
+| 新規/既存 | 分解済み | 継続率 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | 分解済み | 週1以上 74%（`Fact`。出典: 集計） |'
+expect_no "表で宣言した Segment は通る" "必須 Segment"
+
+# 引けないことを理由つきで宣言した Note は通す。
+# **誠実な文書と手抜きの文書を区別できない判定は、作文を生む。**
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 / 引けない理由 |
+|---|---|---|
+| 新規/既存 | 分解済み | 継続率 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | Unknown | 現在値が未計測（MP-003 で計測予定） |'
+expect_no "理由つき Unknown は通る（偽陽性）" "必須 Segment"
+
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 / 引けない理由 |
+|---|---|---|
+| 新規/既存 | 分解済み | 継続率 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | Unknown | |'
+expect "理由の無い Unknown（警告）" "引けないとだけ書かれている"
+
+# 定義側。括弧の内側の `/` で切ると、照合語が壊れて原理的に通らなくなる
+sed_replace "$PD/products/testprod.md" \
+  '必須 Segment: 新規/既存 ・ 利用頻度' \
+  '必須 Segment: 新規/既存（A / B）・ 利用頻度'
+new_note '## Evidence（根拠）
+全体の平均だけを見た（`Fact`。出典: 集計）。'
+expect "括弧の内側の / では切らない（軸が割れない）" "「新規/既存（A / B）」の宣言が無い"
+sed_replace "$PD/products/testprod.md" \
+  '必須 Segment: 新規/既存（A / B）・ 利用頻度' \
+  '必須 Segment: 新規/既存 ・ 利用頻度'
+
+# frontmatter の構造化リスト（v1.5.0〜）。区切り文字を推測しない
+sed_replace "$PD/products/testprod.md" \
+  '# プロダクトコンテキスト（検証用）' \
+  '---
+segments:
+  - id: tenure
+    label: 新規/既存
+    values: [A / 小規模, B / 大規模]
+  - id: usage_frequency
+    label: 利用頻度
+---
+
+# プロダクトコンテキスト（検証用）'
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 / 引けない理由 |
+|---|---|---|
+| 新規/既存 | 分解済み | 62% / 81%（`Fact`。出典: 集計） |
+| 利用頻度 | 分解済み | 74%（`Fact`。出典: 集計） |'
+expect_no "frontmatter の構造化リストを読む" "必須 Segment"
+
+new_note '## Evidence（根拠）
+
+| Segment | 状態 | 内容 / 引けない理由 |
+|---|---|---|
+| 新規/既存 | 分解済み | 62% / 81%（`Fact`。出典: 集計） |'
+expect "構造化リストの片方が沈黙している" "「利用頻度」の宣言が無い"
 
 new_note '## Evidence（根拠）
 新規/既存 で見た。申込は 120 件だった（`Fact`）。'
@@ -599,6 +693,33 @@ cat > "$PERSONA" <<'EOF'
 EOF
 expect "ペルソナの装飾属性（警告）" "装飾属性"
 
+# 引用している行は「使って」いない。禁止表現の語彙に頼ると「使わない」で漏れる
+cat > "$PERSONA" <<'EOF'
+# 利用者像
+
+「年齢」「性別」は判断に効かないので使わない。
+
+## 利用者A
+
+| 項目 | 値 |
+|---|---|
+| 根拠件数 | n = 3 |
+| 確信度 | 実証 |
+
+### 関心
+
+| 関心 | 根拠 |
+|---|---|
+| 探すのに手が止まる | VOICE-001 |
+
+### 非対象
+
+| 含めない人 | 理由 |
+|---|---|
+| 未定義 | |
+EOF
+expect_no "引用した装飾属性は通す（語尾が「使わない」でも）" "装飾属性"
+
 # 正常なペルソナ（件数0の系統を「未取得」で残す形も含む）
 cat > "$PERSONA" <<'EOF'
 # 利用者像
@@ -819,6 +940,32 @@ else
     printf '  ✓ %s\n' "複合語は通す"; pass=$((pass + 1))
 fi
 
+# 規約文そのもの。禁止表現の語彙（「書かない」等）を当てにいくと、
+# 「使わない」「用いない」「避ける」で漏れる。引用しているかどうかで見る。
+cat > "$NAV" <<'EOF'
+# ナビゲーション
+
+「ユーザー」を単独で使わない。どの利用者系統かを指定する。
+
+| 項目名 | 対応先の種別 | 対応先 |
+|---|---|---|
+| 一覧 | 対象物 | 記録 |
+
+## 到達経路
+
+| 画面 | 到達経路 |
+|---|---|
+| 一覧 | 入口 → 一覧 |
+EOF
+expect_no "引用した規約文は通す（語尾が「使わない」でも）" "「ユーザー」を単独で使っている"
+
+# 呼称を決める当のファイルを、その規約で裁かない（自己言及の矛盾）
+mkdir -p "$PD/specs/01-strategy"
+printf '# 用語集\n\nユーザーが不便、のような書き方をしない。\n' \
+    > "$PD/specs/01-strategy/glossary.md"
+expect_no "呼称を定義するファイル自身は対象外" "「ユーザー」を単独で使っている"
+rm "$PD/specs/01-strategy/glossary.md"
+
 # specs は現在値。ここで作った検証用の成果物は残さない
 rm -rf "$PD/specs"
 
@@ -914,15 +1061,6 @@ mv "$WORK/ledger.json" "$PROJ/pd/ledger.json"
 mv "$PROJ/.github/workflows/validate.yml" "$WORK/ci.yml"
 expect "CI の削除" "検証の仕組みが不完全"
 mv "$WORK/ci.yml" "$PROJ/.github/workflows/validate.yml"
-
-sed_replace() {   # $1 = ファイル / $2 = 置換前 / $3 = 置換後
-python3 - "$1" "$2" "$3" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-p.write_text(p.read_text(encoding='utf-8').replace(sys.argv[2], sys.argv[3]),
-             encoding='utf-8')
-PY
-}
 
 CI="$PROJ/.github/workflows/validate.yml"
 sed_replace "$CI" "TZ: Asia/Tokyo" "TZ: UTC"
@@ -1035,6 +1173,12 @@ mv "$WORK/selftest.sh" "$PLUGIN/scripts/selftest.sh"
 mv "$PLUGIN/scripts/release.sh" "$WORK/release.sh"
 expect_plugin "配布手順の削除" "scripts/release.sh: 無い"
 mv "$WORK/release.sh" "$PLUGIN/scripts/release.sh"
+
+# Release はタグの push で自動作成する。無いと `--no-push` や手動 push で配った版の
+# 本文が起動時の更新通知に出ない（v1.4.0 で実際に漏れた）
+mv "$PLUGIN/.github/workflows/release.yml" "$WORK/release.yml"
+expect_plugin "Release の自動作成の削除" ".github/workflows/release.yml: 無い"
+mv "$WORK/release.yml" "$PLUGIN/.github/workflows/release.yml"
 
 # plugin のスキルは必ず名前空間化される。素の /init と書くと利用者が打てない。
 sed_replace "$PLUGIN/README.md" "/pd:init" "/init"
