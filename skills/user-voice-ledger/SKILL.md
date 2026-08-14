@@ -14,6 +14,8 @@ description: 利用者の生の声（ペイン・要望・否定的評価・効�
 | 逐語の記録・採番・重複統合・匿名化 | 層の判定（`ux-layer-triage`） |
 | 引き当て（検索）と「一次情報なし」の宣言 | 要件化（`user-story-writer`） |
 | `status` の更新 | UI の評価（`ux-design-review`） |
+| — | 系統ごとの集計と人物像（`user-persona-builder`） |
+| — | 声を取りに行く計画（`ux-research-planner`） |
 | — | 検証の実施設計（`ux-validation-planner`） |
 
 ## 最初に読む

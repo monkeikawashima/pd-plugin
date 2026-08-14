@@ -15,6 +15,8 @@ description: UI/UX の要望・課題を受け付け、5段階モデル（戦略
 | 5層のどれかの判定 | ストーリー化（`user-story-writer`） |
 | 上流の欠落の特定と作業仮説の提示 | オブジェクトを立てる判断（`object-model-reviewer`） |
 | 次スキルへの振り分け | UI の良し悪しの評価（`ux-design-review`） |
+| — | 戦略の言語化（`strategy-insight-writer`） |
+| — | 利用者像の集計（`user-persona-builder`） |
 | — | 決定の記録（`ux-decision-record`） |
 
 ## 最初に読む
@@ -62,12 +64,13 @@ description: UI/UX の要望・課題を受け付け、5段階モデル（戦略
 
 ### 3. 上流の欠落をチェックする
 
-| 判定した層 | 必要な上流 |
-|---|---|
-| 要件 | `pd/specs/01-strategy/` |
-| 構造 | `pd/specs/02-requirements/` |
-| 骨格 | `pd/specs/03-structure/` |
-| 表層 | `pd/specs/04-skeleton/` |
+| 判定した層 | 必要な上流 | 欠けていたら |
+|---|---|---|
+| 戦略 | 一次情報（`pd/voices/`） | `user-voice-ledger` で先に台帳へ |
+| 要件 | `pd/specs/01-strategy/`（コンセプト・ペルソナ） | `strategy-insight-writer` / `user-persona-builder` |
+| 構造 | `pd/specs/02-requirements/`（ストーリー・ジャーニー） | `user-story-writer` / `ux-journey-mapper` |
+| 骨格 | `pd/specs/03-structure/` | `object-model-reviewer` |
+| 表層 | `pd/specs/04-skeleton/` | `ux-screen-spec-writer` |
 
 上流が未定義でも「判断できません」で終わらせない。**作業仮説の形で出す**（下記の出力形式）。
 
@@ -81,15 +84,27 @@ description: UI/UX の要望・課題を受け付け、5段階モデル（戦略
 
 ### 5. 振り分ける
 
-| 状況 | 次のスキル |
-|---|---|
-| 対象物への収まりが怪しい | `object-model-reviewer` |
-| 要件として言語化する | `user-story-writer` |
-| 既存 UI の評価 | `ux-design-review` |
-| 色・コントラスト | `a11y-contrast-guard` |
-| 一意に決まらない | `ux-validation-planner` |
-| 数値の話 | `ux-measurement` |
-| 上流が変わった | `ux-update-cascade` |
+| 層 | 状況 | 次のスキル |
+|---|---|---|
+| 戦略 | **まだ何が課題か分からない** | `ux-research-planner` |
+| 戦略 | 誰のため・何を成功と呼ぶかが未定義 | `strategy-insight-writer` |
+| 戦略 | 利用者像を揃える | `user-persona-builder` |
+| 要件 | 要件として言語化する | `user-story-writer` |
+| 要件 | 画面をまたぐ流れ・詰まりの話 | `ux-journey-mapper` |
+| 構造 | 対象物への収まりが怪しい | `object-model-reviewer` |
+| 骨格 | メニュー・階層・「見つからない」 | `ia-navigation-reviewer` |
+| 骨格 | **これから作る**画面の設計 | `ux-screen-spec-writer` |
+| 骨格 | 文言・エラー文・空状態 | `ux-writing-guard` |
+| 骨格 | キーボード・フォーカス・読み上げ・動き | `a11y-interaction-guard` |
+| 骨格 | **既に在る** UI の評価 | `ux-design-review` |
+| 表層 | 色・コントラストの下限 | `a11y-contrast-guard` |
+| 表層 | トークンの追加・整理・逸脱 | `design-token-keeper` |
+| 横断 | 一意に決まらない（仮説がある） | `ux-validation-planner` |
+| 横断 | 数値の話 | `ux-measurement` |
+| 横断 | 上流が変わった | `ux-update-cascade` |
+
+> ⚠️ **骨格層で `ux-design-review` に流すのは、対象が既に実装されている場合だけ。**
+> これから作るものをレビューのスキルに渡すと、作り直しの指摘しか出せなくなる。
 
 ### 6. 記録する
 

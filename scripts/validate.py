@@ -349,7 +349,9 @@ PATTERNS = {
     "voices": re.compile(r"^voices/([a-z0-9-]+)/(\d{4})/VOICE-(\d{3,})-([a-z][a-z0-9-]*)\.md$"),
     "simulations": re.compile(r"^simulations/([a-z0-9-]+)/(\d{4})/(\d{8})-([a-z][a-z0-9]*)\.md$"),
     "decisions": re.compile(r"^decisions/([a-z0-9-]+)/(\d{4})/UXDR-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
-    "validations": re.compile(r"^validations/([a-z0-9-]+)/(\d{4})/VP-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
+    # VP- は検証計画（仮説の採否）、RP- は探索計画（まだ仮説が無い段階）。
+    # 別物だが置き場所は分けない。分けると片方が忘れられる。
+    "validations": re.compile(r"^validations/([a-z0-9-]+)/(\d{4})/(?:VP|RP)-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
     "measurements": re.compile(r"^measurements/([a-z0-9-]+)/(\d{4})/MP-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
     "reviews": re.compile(r"^reviews/([a-z0-9-]+)/(\d{4})/DR-(\d{8})-(\d{2})-([a-z][a-z0-9-]*)\.md$"),
 }
@@ -359,7 +361,7 @@ EXPECTED = {
     "voices": "voices/{プロダクト}/{年}/VOICE-NNN-{主題1語}.md",
     "simulations": "simulations/{プロダクト}/{年}/YYYYMMDD-{主題1語}.md",
     "decisions": "decisions/{プロダクト}/{年}/UXDR-YYYYMMDD-NN-{主題1語}.md",
-    "validations": "validations/{プロダクト}/{年}/VP-YYYYMMDD-NN-{主題1語}.md",
+    "validations": "validations/{プロダクト}/{年}/VP-YYYYMMDD-NN-{主題1語}.md（探索は RP-）",
     "measurements": "measurements/{プロダクト}/{年}/MP-YYYYMMDD-NN-{主題1語}.md",
     "reviews": "reviews/{プロダクト}/{年}/DR-YYYYMMDD-NN-{主題1語}.md",
 }
@@ -716,6 +718,24 @@ def check_validation(path: Path) -> None:
         err(path, "行動観察の設計が無い（意見聴取だけで仮説を採否しない）")
 
 
+def check_research(path: Path) -> None:
+    """探索計画。検証（VP）と取り違えないための3点だけを見る。
+
+    探索の失敗は「仮説の採否が決まらない」ではなく「**何も新しく分からない**」。
+    最も多い原因は、答えを自分で言ってしまうこと（誘導質問）。
+    """
+    check_path(path, "validations")
+    text = path.read_text(encoding="utf-8")
+    if "対象者" not in text:
+        err(path, "対象者の欄が無い（人数・役割は人間が決める。未定なら"
+                  "「未定」と決める人・期限を書く）")
+    if "聞かない" not in text:
+        err(path, "「聞かないこと」が無い（誘導質問を先に排さないと、"
+                  "知りたかったことが最初から答えの中に無い）")
+    if "voices" not in text and "逐語" not in text:
+        err(path, "逐語の記録先が無い（発話は要約せず pd/voices/ へ流す）")
+
+
 def check_review(path: Path) -> None:
     """レビュー結果。見れば分かる課題と、検証しないと決まらない仮説を分ける。"""
     check_path(path, "reviews")
@@ -725,6 +745,159 @@ def check_review(path: Path) -> None:
         err(path, "「見れば分かる課題」と「検証しないと決まらない仮説」に分かれていない")
     if "デザイナー起案" not in text and "VOICE-" not in text:
         err(path, "根拠のボイス（VOICE-…）が無い指摘に「デザイナー起案」の明記が無い")
+
+
+# ------------------------------------------------------- 層の成果物（v1.2.0）
+#
+# specs/ は「現在値」であり追記のみではない。台帳は見ないが、**中身の空白の書き方**
+# だけを見る。埋めれば進むが、埋めた瞬間に「誰も決めていないこと」が決定として
+# 流通する箇所を、層ごとに1〜4個だけ固定する。
+#
+# 判定を増やしすぎない。specs は人が手で直すファイルであり、誤検知が出た時点で
+# 「validate を通すための記述」が書かれ始める。**それは規律ではなく作文になる。**
+
+# 反例として並べている行は対象外にする（禁止例を書いた文書が落ちるため）。
+# COUNTER_EXAMPLE と同じ役割だが、あちらは配布物向けで定義がこの下にあるため分ける。
+SPEC_COUNTER = ("✗", "❌", "書かない", "書かず", "禁止",
+                "記載しない", "持たせない", "混ぜない")
+
+# 検証されていない断定が、検証済みの記述と同じ見た目で混ざる属性。
+# **警告に留める**（業種によっては正当な分解軸になりうる。誤検知で判定器全体が
+# 信用を失うより、判断を人に残すほうがよい）
+DECORATION = ["年齢", "性別", "趣味", "家族構成", "年収"]
+
+
+def _has_evidence(text: str, *escapes: str) -> bool:
+    """根拠が引かれているか、引けないことが宣言されているか。"""
+    return "VOICE-" in text or any(e in text for e in escapes)
+
+
+def check_personas(path: Path) -> None:
+    """利用者像。創作を防ぎ、件数0の系統に像を書かせない。"""
+    text = path.read_text(encoding="utf-8")
+
+    if "確信度" not in text:
+        err(path, "確信度（実証 / 作業仮説 / 未取得）が無い。"
+                  "検証を通った像と、そうでない像が同じ見た目で混ざる")
+    if not _has_evidence(text, "未取得"):
+        err(path, "根拠（VOICE-…）も「未取得」も無い。"
+                  "台帳を引かずに書いた像は、集計ではなく創作")
+    if "作業仮説" in text and "棄却条件" not in text:
+        err(path, "確信度に「作業仮説」があるのに棄却条件が無い"
+                  "（棄却条件のない仮説は、記録しても捨てられない）")
+    if "非対象" not in text:
+        err(path, "「非対象」（この像に含めない人）が無い。"
+                  "非対象が空のペルソナは、全員を指しているのと同じ")
+
+    for i, line in enumerate(text.split("\n"), 1):
+        if any(c in line for c in SPEC_COUNTER):
+            continue
+        for word in DECORATION:
+            if word in line:
+                warn(path, f"装飾属性「{word}」がある（判断に効かず、"
+                           f"検証されていない断定が混ざる）", i)
+                break
+
+
+def check_journeys(path: Path) -> None:
+    """ジャーニー。計測の分解式と切り離された「絵」にしない。"""
+    text = path.read_text(encoding="utf-8")
+
+    if "主要タスク時間" not in text:
+        err(path, "主要タスク時間との対応が無い。ステップは計測の構成要素と"
+                  "同一物として扱う（二重に定義すると必ず食い違う）")
+    if "ペルソナ" not in text:
+        err(path, "対象ペルソナの指定が無い（誰の流れか分からない）")
+    if not _has_evidence(text, "一次情報なし"):
+        err(path, "根拠（VOICE-…）も「一次情報なし」も無い")
+    if "未取得" not in text and not re.search(r"[0-9０-９]", text):
+        err(path, "所要時間に値も「未取得」も無い（それらしい数字を置かず、未取得と書く）")
+
+
+SCREEN_STATES = ["初期", "処理中", "成功", "空振り", "エラー"]
+HEX_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+
+
+def check_screen_spec(path: Path) -> None:
+    """画面仕様。空振りの欠落と、表層の値の直書きを止める。"""
+    text = path.read_text(encoding="utf-8")
+
+    missing = [s for s in SCREEN_STATES if s not in text]
+    if missing:
+        err(path, f"状態設計に {' / '.join(missing)} が無い"
+                  f"（特に**空振り**＝処理は成功したが有効な結果が無い状態を省略しない）")
+    if not _has_evidence(text, "一次情報なし", "デザイナー起案"):
+        err(path, "根拠のボイス（VOICE-…）も「デザイナー起案」の明記も無い")
+    for i, line in enumerate(text.split("\n"), 1):
+        if any(c in line for c in SPEC_COUNTER):
+            continue
+        m = HEX_LITERAL.search(line)
+        if m:
+            err(path, f"色の値を画面仕様に直書きしている: {m.group(0)}"
+                      f"（トークン名で書く。値は {BASE_REL}specs/05-surface/"
+                      f"design-tokens.md が持つ）", i)
+
+
+def check_design_tokens(path: Path) -> None:
+    """トークン台帳。定義の正が決まっているか、期限の無い例外が無いか。"""
+    text = path.read_text(encoding="utf-8")
+
+    if "真実の源" not in text:
+        err(path, "「真実の源」（どのファイルが定義の正か）が無い。"
+                  "2箇所で定義された状態を検出できない")
+    if "逸脱" not in text:
+        err(path, "逸脱一覧が無い（表層の成果物はトークンと逸脱の2つ）")
+    for i, line in enumerate(text.split("\n"), 1):
+        if line.lstrip().startswith("|") and "未定" in line:
+            err(path, "逸脱の行に「未定」がある。**期限の無い例外は恒久化する**。"
+                      "期限を決められないなら UXDR へ回し、棄却条件つきの作業仮説にする", i)
+
+
+def check_navigation(path: Path) -> None:
+    """ナビゲーション。到達できない画面と、根拠のない項目を検出する。"""
+    text = path.read_text(encoding="utf-8")
+
+    if "到達経路" not in text:
+        err(path, "到達経路が無い（どの入口から辿り着けるかを書かない情報設計は、"
+                  "迷子＝どこからも辿り着けない画面を検出できない）")
+    if "対象物" not in text and "ステップ" not in text:
+        err(path, "各項目の対応先（対象物 / ジャーニーのステップ）が無い。"
+                  "どちらにも対応しない項目は、誰の関心でもない")
+
+
+def check_spec(path: Path) -> None:
+    """specs/ 配下の成果物。ファイルの置き場所で担当を決める。"""
+    rel = rel_to_base(path)
+    if rel == "specs/01-strategy/personas.md":
+        check_personas(path)
+    elif rel == "specs/02-requirements/journeys.md":
+        check_journeys(path)
+    elif rel.startswith("specs/04-skeleton/screens/"):
+        check_screen_spec(path)
+    elif rel == "specs/04-skeleton/navigation.md":
+        check_navigation(path)
+    elif rel == "specs/05-surface/design-tokens.md":
+        check_design_tokens(path)
+    check_naming(path)
+
+
+# 「ユーザー」を単独で使わない、は v0.6.0 から規約にあるが、これまで誰も見ていなかった。
+# 系統をまたいだ「ユーザーが不便」は、**誰の何が不便なのか分からないまま合意が成立する。**
+#
+# 複合語（ユーザーストーリー / ユーザー検証 / エンドユーザー…）は正当なので、
+# **直後が助詞・句読点・行末のときだけ**拾う。判定は警告に留める
+# （文脈によっては一般論として正しく、誤検知で判定器全体が無視されるほうが損失が大きい）。
+BARE_USER = re.compile(r"ユーザー(?=[はがをにのもとやへ、。）」\]]|\s|$)")
+
+
+def check_naming(path: Path) -> None:
+    """呼称。どの利用者系統の話かを省いていないか。"""
+    for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+        if any(c in line for c in SPEC_COUNTER):
+            continue
+        if BARE_USER.search(line):
+            warn(path, "「ユーザー」を単独で使っている。どの利用者系統かを指定する"
+                       f"（呼称は {BASE_REL}specs/01-strategy/glossary.md で決める）", i)
 
 
 def check_simulation(path: Path) -> None:
@@ -797,6 +970,38 @@ def check_plugin_guards() -> None:
     check_command_names()
     check_plugin_is_generic()
     check_documented_paths()
+    check_skill_shape()
+
+
+# スキルが増えるほど、担当の重なりが事故になる。「どのスキルを呼べばよいか」が
+# 判断できなくなり、結局いつも同じ1つだけが使われる。
+# 個々のスキル名を列挙して守るのではなく、**形**を守る（列挙は必ず取り残される）。
+SKILL_SHAPE_EXEMPT = {"analyze"}   # analyze はオーケストレーション側で、層を持たない
+
+
+def check_skill_shape() -> None:
+    """各スキルが SKILL.md と役割分界の表を持っているか。"""
+    skills_dir = PLUGIN_ROOT / "skills"
+    if not skills_dir.exists():
+        return
+    for d in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+        entry = d / "SKILL.md"
+        if not entry.exists():
+            errors.append(f"skills/{d.name}/SKILL.md: 無い"
+                          f"（ディレクトリはあるがスキルとして読み込まれない）")
+            continue
+        text = entry.read_text(encoding="utf-8")
+        fm = frontmatter(text)
+        if fm.get("name") != d.name:
+            err(entry, f"frontmatter の name（{fm.get('name')}）が"
+                       f"ディレクトリ名（{d.name}）と違う")
+        if not fm.get("description"):
+            err(entry, "description が無い（呼び出される場面を判定できない）")
+        if d.name in SKILL_SHAPE_EXEMPT:
+            continue
+        if "役割分界" not in text:
+            err(entry, "役割分界の表が無い（何をやらないか・誰の担当かが不明だと、"
+                       "スキルが増えるほど担当が重なって事故になる）")
 
 
 # 記録ファイルの置き場所は「pd/{種別}/{プロダクト}/{年}/{接頭辞}-…」で統一されている。
@@ -1109,9 +1314,14 @@ def validate(paths: list[Path]) -> None:
         elif rel.startswith("measurements/") and path.suffix == ".md":
             check_measurement(path)
         elif rel.startswith("validations/") and path.suffix == ".md":
-            check_validation(path)
+            if path.name.startswith("RP-"):
+                check_research(path)
+            else:
+                check_validation(path)
         elif rel.startswith("reviews/") and path.suffix == ".md":
             check_review(path)
+        elif rel.startswith("specs/") and path.suffix == ".md":
+            check_spec(path)
         elif rel.startswith(f"{PRODUCTS_REL}/") and path.stem not in {"_template"}:
             check_product(path)
 
