@@ -1,6 +1,6 @@
 ---
 description: pd plugin を最新版に更新する（配布元の取り直しと更新をまとめて行う）
-allowed-tools: Bash(claude plugin *), Bash(python3 *)
+allowed-tools: Bash(claude plugin *), Bash(python3 *), Read, Edit
 ---
 
 # pd-update
@@ -29,7 +29,15 @@ claude plugin marketplace update pd-plugin && claude plugin update pd@pd-plugin
 
    **判定のルールが変わった版では、昨日まで通っていたファイルが落ちる。** 更新は無条件に良いことではない。何が変わったかを読む機会を必ず渡す。
 3. 今のセッションに反映するため `/reload-plugins` を実行するよう伝える（実行するのは利用者）
-4. **CI を使っているプロジェクトでは、`pd/`… ではなく `.github/workflows/validate.yml` の `ref` も同じ版に上げる**よう伝える。忘れると手元と CI で判定が食い違う
+4. **`.github/workflows/validate.yml` の `ref` を、その場で新しい版に書き換える。** 伝えるだけにしない
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate.py"
+   ```
+
+   `CI が固定している plugin の版が古い` と出たら、`Edit` でその `ref:` を新しい版に直し、もう一度 `validate.py` を実行して消えたことを確かめる。**警告が消えるまでが更新。**
+
+   ここを人の記憶に委ねると必ず忘れる（実際に v1.0.1 のまま v1.3.0 まで放置された）。忘れれば手元と CI で違う判定器が動く。
 
 ## うまくいかないとき
 

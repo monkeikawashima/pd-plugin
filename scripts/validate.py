@@ -1251,6 +1251,53 @@ def check_project_guards() -> None:
         # （作業用パスの .pd-plugin と紛れないよう、スラッシュ込みで見る）
         if "/pd-plugin" not in body:
             err(ci, "plugin を取得する手順が無い（CI で validate.py を実行できない）")
+        check_ci_ref(ci, body)
+
+
+def check_ci_ref(ci: Path, body: str) -> None:
+    """CI が固定している plugin の版と、いま動いている plugin の版を突き合わせる。
+
+    `ref:` は `/pd:init` が走った時点の版を焼き込む文字列で、以後は誰も触らない。
+    `/pd:update` は「ref も上げるように伝える」だけで、実際に上げるのは人間の記憶に
+    委ねられていた。忘れれば手元（更新済み）と CI（旧版）で違う判定器が動く。
+    **判定者は1つ**という前提が、判定者自身の版で崩れていた。
+
+    ここで比較できるのは、CI 実行時には ref で checkout した plugin が手元にあり、
+    手元実行時にはインストール済みの plugin が手元にあるため。つまり
+    `PLUGIN_ROOT` の版が「いま判定している版」そのものになる。
+
+    止めない（警告）。版がズレていても分析そのものは行えるし、更新直後に全プロジェクトが
+    一斉に落ちると、直す前に検証器を外される。
+    """
+    manifest = PLUGIN_ROOT / ".claude-plugin/plugin.json"
+    try:
+        version = json.loads(manifest.read_text(encoding="utf-8")).get("version")
+    except (json.JSONDecodeError, OSError):
+        return
+    if not version:
+        return
+
+    refs = re.findall(r"ref:\s*v?([\d.]+)", body)
+    if not refs:
+        # 版を固定していない = CI が既定ブランチを追う。判定が予告なく変わり、
+        # 手元を更新していないのに CI だけ落ちる日が来る。
+        warn(ci, f"plugin の版を固定していない（ref が無い）。"
+                 f"`ref: v{version}` を指定する")
+        return
+
+    for ref in set(refs):
+        if ref == version:
+            continue
+        if _parts(ref) < _parts(version):
+            warn(ci, f"CI が固定している plugin の版が古い（v{ref} ≠ v{version}）。"
+                     f"手元と CI で違う判定器が動く。ref を v{version} に上げる")
+        else:
+            warn(ci, f"CI が固定している plugin の版が手元より新しい"
+                     f"（v{ref} ≠ v{version}）。`/pd:update` で手元を更新する")
+
+
+def _parts(v: str) -> tuple:
+    return tuple(int(n) for n in v.split(".") if n.isdigit())
 
 
 def check_product(path: Path) -> None:

@@ -62,7 +62,11 @@ mkdir -p "$PD/products" "$PD/analyses/testprod/2026" "$PROJ/pd" \
          "$PROJ/.github/workflows"
 printf '{}\n' > "$PROJ/pd/ledger.json"
 
-cat > "$PROJ/.github/workflows/validate.yml" <<'EOF'
+# CI が固定する版は、いま検証している plugin の版と揃っているのが正常な状態
+PLUGIN_VERSION=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" \
+                 "$PLUGIN/.claude-plugin/plugin.json")
+
+cat > "$PROJ/.github/workflows/validate.yml" <<EOF
 name: validate
 on: [push]
 jobs:
@@ -75,6 +79,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: monkeikawashima/pd-plugin
+          ref: v$PLUGIN_VERSION
           path: .pd-plugin
       - run: python3 .pd-plugin/scripts/validate.py
 EOF
@@ -927,6 +932,18 @@ sed_replace "$CI" "TZ: UTC" "TZ: Asia/Tokyo"
 sed_replace "$CI" "monkeikawashima/pd-plugin" "octocat/hello"
 expect "CI が plugin を取得しない" "plugin を取得する手順が無い"
 sed_replace "$CI" "octocat/hello" "monkeikawashima/pd-plugin"
+
+# 判定者自身の版のズレ。/pd:update は ref を上げず「伝える」だけだったため、
+# 忘れると手元と CI で違う判定器が動いたまま ✓ が出続けていた。
+sed_replace "$CI" "ref: v$PLUGIN_VERSION" "ref: v0.0.1"
+expect "CI が固定する plugin の版が古い" "CI が固定している plugin の版が古い"
+sed_replace "$CI" "ref: v0.0.1" "ref: v9999.0.0"
+expect "CI が固定する plugin の版が手元より新しい" "手元より新しい"
+sed_replace "$CI" "          ref: v9999.0.0
+" ""
+expect "CI が plugin の版を固定していない" "plugin の版を固定していない"
+sed_replace "$CI" "          path: .pd-plugin" "          ref: v$PLUGIN_VERSION
+          path: .pd-plugin"
 
 # ------------------------------------------------------- 仕組みの無効化（plugin 側）
 
