@@ -1580,6 +1580,19 @@ def check_rule_registry() -> None:
                      f"**適用開始日を通らないため、書いた時点で存在しない判定が"
                      f"過去の Note に遡って効く。** note_err / note_warn を使う")
 
+    # 適用開始日は「その判定を配った版の日付」でなければならない。
+    # 打ち間違いや、どの版にも対応しない日付を書くと、**遡及の判定が静かに狂う**
+    # （早すぎれば過去の Note を巻き込み、遅すぎれば当分どの Note にも効かない）。
+    changelog = PLUGIN_ROOT / "CHANGELOG.md"
+    if changelog.exists():
+        released = set(re.findall(r"^## \[\d+\.\d+\.\d+\]\s*[—-]\s*(\d{4}-\d{2}-\d{2})",
+                                  changelog.read_text(encoding="utf-8"), re.M))
+        if released:
+            for rule, date in sorted(RULE_SINCE.items()):
+                if date != RULES_FROM and date not in released:
+                    err(src, f"判定「{rule}」の適用開始日 {date} が、どの版の日付とも"
+                             f"一致しない（配った日を書く。CHANGELOG の見出しの日付）")
+
     used = set(re.findall(r'note_(?:err|warn)\(path, fm, "([a-z0-9-]+)"', body))
     for rule in sorted(used - set(RULE_SINCE)):
         err(src, f"判定「{rule}」が RULE_SINCE に無い"

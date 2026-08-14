@@ -1454,6 +1454,13 @@ sed_replace "$VALIDATE" 'note_warn(path, fm, "note-length"' \
 expect_plugin "RULE_SINCE に無い判定" "RULE_SINCE に無い"
 cp "$WORK/validate.py" "$VALIDATE"
 
+# 適用開始日は「配った版の日付」でなければならない。
+# どの版とも対応しない日付を書くと、遡及の判定が静かに狂う
+sed_replace "$VALIDATE" '"segment-declaration": "2026-08-14"' \
+                        '"segment-declaration": "2026-09-99"'
+expect_plugin "どの版とも対応しない適用開始日" "どの版の日付とも一致しない"
+cp "$WORK/validate.py" "$VALIDATE"
+
 # 正しい書き方の例が無い判定を作れないようにする。
 # 壊れた例だけを増やすと、締めたときに正しい文書を巻き込んだことに気づけない
 cp "$PLUGIN/scripts/selftest.sh" "$WORK/selftest-cov.sh"
