@@ -86,16 +86,20 @@ description: UI/UX の要望・課題を受け付け、5段階モデル（戦略
 
 | 層 | 状況 | 次のスキル |
 |---|---|---|
+| 戦略 | **まだ何が課題か分からない** | `ux-research-planner` |
 | 戦略 | 誰のため・何を成功と呼ぶかが未定義 | `strategy-insight-writer` |
 | 戦略 | 利用者像を揃える | `user-persona-builder` |
 | 要件 | 要件として言語化する | `user-story-writer` |
 | 要件 | 画面をまたぐ流れ・詰まりの話 | `ux-journey-mapper` |
 | 構造 | 対象物への収まりが怪しい | `object-model-reviewer` |
+| 骨格 | メニュー・階層・「見つからない」 | `ia-navigation-reviewer` |
 | 骨格 | **これから作る**画面の設計 | `ux-screen-spec-writer` |
+| 骨格 | 文言・エラー文・空状態 | `ux-writing-guard` |
+| 骨格 | キーボード・フォーカス・読み上げ・動き | `a11y-interaction-guard` |
 | 骨格 | **既に在る** UI の評価 | `ux-design-review` |
 | 表層 | 色・コントラストの下限 | `a11y-contrast-guard` |
 | 表層 | トークンの追加・整理・逸脱 | `design-token-keeper` |
-| 横断 | 一意に決まらない | `ux-validation-planner` |
+| 横断 | 一意に決まらない（仮説がある） | `ux-validation-planner` |
 | 横断 | 数値の話 | `ux-measurement` |
 | 横断 | 上流が変わった | `ux-update-cascade` |
 

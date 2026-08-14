@@ -8,10 +8,10 @@ UI/UX の議論を「好み」で終わらせないための座標系。**発言
 
 | 層 | 答える問い | 中間成果物 | 担当スキル |
 |---|---|---|---|
-| **戦略** | 誰のために作るか。何を成功と呼ぶか | インサイト / コンセプト / KPI / ポジショニング / **ペルソナ** | `strategy-insight-writer` / `user-persona-builder` |
+| **戦略** | 誰のために作るか。何を成功と呼ぶか | インサイト / コンセプト / KPI / ポジショニング / **ペルソナ** | `ux-research-planner` / `strategy-insight-writer` / `user-persona-builder` |
 | **要件** | 何を提供するか（体験の単位） | 体験の原則 / ユーザーストーリー / **ジャーニー** | `user-story-writer` / `ux-journey-mapper` |
 | **構造** | 何を対象物として扱い、どう関係づけるか | オブジェクトモデル / フェーズ別コアオブジェクト | `object-model-reviewer` |
-| **骨格** | 画面のどこに何を置き、どう操作するか | レイアウト仮説 / 画面仕様 | `ux-screen-spec-writer` |
+| **骨格** | 画面のどこに何を置き、どう操作するか | レイアウト仮説 / 画面仕様 / **ナビゲーション** / 文言 | `ia-navigation-reviewer` / `ux-screen-spec-writer` / `ux-writing-guard` / `a11y-interaction-guard` |
 | **表層** | どう見えるか（色・タイポ・余白） | デザイントークン / 逸脱一覧 | `design-token-keeper` / `a11y-contrast-guard` |
 
 出典: Jesse James Garrett『The Elements of User Experience』の Strategy / Scope / Structure / Skeleton / Surface。

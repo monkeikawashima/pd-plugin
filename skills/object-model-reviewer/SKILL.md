@@ -14,6 +14,7 @@ description: 構造層のスキル。利用者が扱う「対象物（オブジ�
 | フェーズ別コア／サブの更新 | 画面の評価（`ux-design-review`） |
 | `taxonomy.json` の語彙更新 | 決定の記録（`ux-decision-record`） |
 | — | 画面仕様の起草（`ux-screen-spec-writer`） |
+| — | ナビゲーションの並べ方（`ia-navigation-reviewer`） |
 
 ## 最初に読む
 

@@ -156,19 +156,23 @@ Note が1件も無い場合、この Step は不要。既存 Note を全件読�
 | 0 | UI/UX の話が出たら**最初に** | `ux-layer-triage`（層の判定） |
 | 1 | 利用者の生の声を受け取った | `user-voice-ledger`（**要約せず逐語のまま**） |
 | 2 | UI を作る／直す**前** | `user-voice-ledger`（対象画面のボイスを引き当て） |
-| 3 | 誰のため・何を成功と呼ぶかが未定義 | `strategy-insight-writer` |
-| 4 | 利用者像を揃える | `user-persona-builder`（**創作せず台帳から集計**） |
-| 5 | 要望を要件にする | `user-story-writer` |
-| 6 | 画面をまたぐ流れ・詰まりの話 | `ux-journey-mapper` |
-| 7 | 置き場所・対象物の話 | `object-model-reviewer` |
-| 8 | **これから作る**画面の設計 | `ux-screen-spec-writer` |
-| 9 | **既に在る** UI の評価（実装後・PR 前） | `ux-design-review` |
-| 10 | 色・コントラストに触る | `a11y-contrast-guard`（**目分量で置かない**） |
-| 11 | トークンの追加・整理・逸脱 | `design-token-keeper` |
-| 12 | 決められない論点が残った | `ux-validation-planner` |
-| 13 | 数値で示す | `ux-measurement` |
-| 14 | 決めた／決められなかった | `ux-decision-record` |
-| 15 | 上流の前提が変わった | `ux-update-cascade` |
+| 3 | **まだ何が課題か分からない** | `ux-research-planner`（探索。仮説の前） |
+| 4 | 誰のため・何を成功と呼ぶかが未定義 | `strategy-insight-writer` |
+| 5 | 利用者像を揃える | `user-persona-builder`（**創作せず台帳から集計**） |
+| 6 | 要望を要件にする | `user-story-writer` |
+| 7 | 画面をまたぐ流れ・詰まりの話 | `ux-journey-mapper` |
+| 8 | 置き場所・対象物の話 | `object-model-reviewer` |
+| 9 | メニュー・階層・「見つからない」 | `ia-navigation-reviewer` |
+| 10 | **これから作る**画面の設計 | `ux-screen-spec-writer` |
+| 11 | 文言・エラー文・空状態 | `ux-writing-guard` |
+| 12 | **既に在る** UI の評価（実装後・PR 前） | `ux-design-review` |
+| 13 | 色・コントラストに触る | `a11y-contrast-guard`（**目分量で置かない**） |
+| 14 | キーボード・フォーカス・読み上げ・動き | `a11y-interaction-guard`（**動かして確かめる**） |
+| 15 | トークンの追加・整理・逸脱 | `design-token-keeper` |
+| 16 | 決められない論点が残った | `ux-validation-planner`（検証。仮説がある） |
+| 17 | 数値で示す | `ux-measurement` |
+| 18 | 決めた／決められなかった | `ux-decision-record` |
+| 19 | 上流の前提が変わった | `ux-update-cascade` |
 
 > **5層すべてに担当がある。** 層を判定したのに行き先が無い状態を作らない
 > （行き先が無いと、判定はされたが議論は好みに戻る）。
@@ -176,7 +180,7 @@ Note が1件も無い場合、この Step は不要。既存 Note を全件読�
 規律の実体は `skills/analyze/uiux/` にある。
 
 - `uiux/rules/` — 共通言語 / 層の規律 / 決定規則 / 証拠規則 / アクセシビリティ / 運用の劣化と対処
-- `uiux/templates/` — 画面仕様 / ユーザーストーリー / UXDR / 検証計画 / ペルソナ / ジャーニー / デザイントークン
+- `uiux/templates/` — 画面仕様 / ユーザーストーリー / UXDR / 検証計画 / ペルソナ / ジャーニー / デザイントークン / 探索計画 / ナビゲーション
 - `uiux/voice-schema.md` — ボイス台帳のスキーマ（**正本**）
 - `uiux/glossary.md` — 用語
 
