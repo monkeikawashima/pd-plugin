@@ -115,7 +115,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: monkeikawashima/pd-plugin
-          ref: v1.5.3
+          ref: v1.6.0
           path: .pd-plugin
       - name: 規約を検証する
         run: python3 .pd-plugin/scripts/validate.py
