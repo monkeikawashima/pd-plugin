@@ -126,6 +126,9 @@ jobs:
 6. **CLAUDE.md** — 無ければ作り、あれば「pd の規約」節を追記する（既にあれば触らない）。内容は次を含める
 
 - 判定者は1つ。`/pd:validate` が唯一の判定者で、人の解釈で合否を決めない
+- **手元の判定は参考、CI が正。** plugin の版は人によってズレる（サードパーティ marketplace は auto-update が既定で無効）。合否は `.github/workflows/validate.yml` の `ref` で固定した版で決まる
+- **`--accept` を含む変更は、書いた本人以外が見る。** 承認は `pd/ledger-log.md` に残るが、表記の統一を超えていないかは人しか判断できない
+- PR に `pd/` の差分が混ざるのは仕様。実装と同じコミットで動かすため、別のリポジトリや外部ツールに分けない
 - pd が作るものは `pd/` 配下に置く。やめるときは `/pd:uninstall`
 - `pd/products/` と `pd/specs/` は上書き、`pd/analyses/` `pd/voices/` `pd/simulations/` `pd/decisions/` `pd/validations/` `pd/measurements/` `pd/reviews/` は追記のみ
 - Evidence には `Fact` / `Interpretation` / `Hypothesis` / `Unknown` のいずれかを付ける
