@@ -27,6 +27,7 @@ description: 骨格層のスキル。画面のどこに何を置き、どう操�
 | `pd/specs/03-structure/object-model.md` | 画面に出す対象物の名前 |
 | `pd/specs/02-requirements/journeys.md` | この画面が担うステップ |
 | `pd/specs/02-requirements/user-stories.md` | 対応するストーリー |
+| `pd/specs/05-surface/design-system.md` | **UI を書く前の参照先**（コンポーネントの出所） |
 | `pd/specs/05-surface/design-tokens.md` | 使えるトークン名 |
 
 > ⚠️ **構造層の成果物が無いまま書き始めない。** 無い場合は作業仮説として明示し、棄却条件を付ける。

@@ -1111,6 +1111,259 @@ def check_design_tokens(path: Path) -> None:
                       "期限を決められないなら UXDR へ回し、棄却条件つきの作業仮説にする", i)
 
 
+# デザインシステムの参照先。UI・モックを作る前に読む1枚。
+#
+# **無いこと自体は違反にしない。** 導入直後や PoC では決まっていないほうが普通で、
+# そこで落とすと `/pd:init` の直後から赤くなる（hook が促す側で受け持つ）。
+# 見るのは「**書いたのに実物を指していない**」状態だけ — 乗り換えたのに台帳が
+# 取り残されると、全員が存在しないディレクトリを参照しに行く。
+DS_REF_SECTION = "参照先"
+DS_BACKTICK = re.compile(r"`([^`]+)`")
+
+
+def _ds_checkable(ref: str) -> bool:
+    """参照先のうち、実在を確かめられるものか。"""
+    if not ref or ref.startswith(("http://", "https://", "@", "<")):
+        return False          # URL / パッケージ名 / 未記入の雛形
+    if " " in ref:
+        return False          # 起動コマンド（`npm run storybook` 等）
+    return "/" in ref or "." in ref
+
+
+def check_design_system(path: Path) -> None:
+    """デザインシステムの参照先。書いた参照先が実物を指しているか。"""
+    text = path.read_text(encoding="utf-8")
+
+    if "種別" not in text:
+        err(path, "「種別」が無い（既製 / 自前 / Figma ライブラリ / 併用 / 無し）。"
+                  "**未記入と「無いと決めた」を区別できないと、UI の作業のたびに"
+                  "同じ確認が繰り返される**")
+    if "真実の源" not in text:
+        err(path, "「真実の源」（どこを見れば正解が分かるか）が無い。"
+                  "参照先の書かれていないデザインシステムは、無いのと同じ")
+
+    in_refs = False
+    for i, line in enumerate(text.split("\n"), 1):
+        if line.startswith("#"):
+            in_refs = DS_REF_SECTION in line
+            continue
+        if line.lstrip().startswith("|") and "未定" in line:
+            err(path, "適用しない範囲に「未定」がある。**期限の無い例外は恒久化する**。"
+                      "期限を決められないなら UXDR へ回し、棄却条件つきの作業仮説にする", i)
+        if not in_refs:
+            continue
+        for ref in DS_BACKTICK.findall(line):
+            if ref.startswith("<") and ref.endswith(">"):
+                err(path, f"参照先が雛形のまま: {ref!r}"
+                          f"（決まっていないなら種別を「無し」にする。"
+                          f"埋めない雛形は、決めたつもりだけを残す）", i)
+            elif _ds_checkable(ref) and not (ROOT / ref).exists():
+                err(path, f"参照先が存在しない: {ref!r}"
+                          f"（乗り換えたのに台帳が取り残されている。"
+                          f"変更は /pd:design-system で反映する）", i)
+
+
+# ------------------------------------------- モックと実装のズレを機械が見つける
+#
+# モックで合意したのに、実装で要素が落ち、色がトークンから外れ、文言が言い換わる。
+# 原因は「モックの中身を覚えているのは会話だけ」であること。**会話は次の日には
+# 残っていない**し、落ちたことは落ちた側からは見えない。
+#
+# 間に機械が読める1枚（モック台帳）を挟む。抽出は mock_capture.py が行い、
+# **ここが実装と突き合わせる**。捨てるなら台帳の上で理由つきで捨てさせる。
+#
+# **無いこと自体は違反にしない。** モックを作らない画面もある。見るのは
+# 「台帳を作ったのに実装が追いついていない」状態だけ。
+MOCK_STATE_DONE = "実装"
+MOCK_STATE_SKIP = ("見送り", "動的", "対象外")
+MOCK_NOT_STARTED = ("未着手", "これから", "無し", "なし")
+MOCK_PLACEHOLDER = re.compile(r"<[^>|]+>")
+
+# 実装を読みにいく拡張子。ここに無いものは黙って飛ばす（画像・ロックファイル）
+IMPL_SUFFIX = (".tsx", ".ts", ".jsx", ".js", ".mjs", ".vue", ".svelte", ".astro",
+               ".html", ".css", ".scss", ".sass", ".less", ".py", ".rb", ".php",
+               ".kt", ".swift", ".dart", ".java", ".cs", ".go", ".erb", ".haml",
+               ".json", ".yml", ".yaml", ".md")
+IMPL_SKIP_DIRS = {"node_modules", ".git", "dist", "build", ".next", ".nuxt",
+                  "vendor", "coverage", "__pycache__", ".venv"}
+
+
+def _table_rows(text: str, heading: str) -> list[tuple[int, list[str]]]:
+    """見出しの下にある表の中身。区切り行と見出し行は返さない。"""
+    rows, inside = [], False
+    for i, line in enumerate(text.split("\n"), 1):
+        if line.startswith("#"):
+            inside = heading in line
+            continue
+        if not inside:
+            continue
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        if not cells or set("".join(cells)) <= set("-: "):
+            continue
+        if cells[0] in ("#", "No"):
+            continue
+        rows.append((i, cells))
+    return rows
+
+
+def _field(text: str, name: str) -> str:
+    m = re.search(rf"^\s*[-*]\s*\**{name}\**\s*[:：]\s*(.+)$", text, re.M)
+    return m.group(1).strip() if m else ""
+
+
+def _impl_source(target: str) -> str | None:
+    """実装先のテキストを1つに連結して返す。読めなければ None。"""
+    root = ROOT / target.strip().strip("`")
+    if root.is_file():
+        return root.read_text(encoding="utf-8", errors="replace")
+    if not root.is_dir():
+        return None
+    chunks, budget = [], 4_000_000
+    for p in sorted(root.rglob("*")):
+        if not p.is_file() or p.suffix.lower() not in IMPL_SUFFIX:
+            continue
+        if IMPL_SKIP_DIRS & set(p.parts):
+            continue
+        chunks.append(p.read_text(encoding="utf-8", errors="replace"))
+        budget -= len(chunks[-1])
+        if budget <= 0:
+            break
+    return "\n".join(chunks)
+
+
+def _squeeze(s: str) -> str:
+    """空白を落として比べる。実装では長い文言が行をまたいで折り返される。"""
+    return "".join(s.split())
+
+
+def _mock_state(cell: str) -> str:
+    """行の状態。`実装` / `skip` / `""`（未記入・不正）。"""
+    if any(word in cell for word in MOCK_STATE_SKIP):
+        return "skip"
+    if cell.startswith(MOCK_STATE_DONE):
+        return MOCK_STATE_DONE
+    return ""
+
+
+def check_mock_ledger(path: Path) -> None:
+    """モック台帳。モックにあったものが実装から落ちていないかを見る。"""
+    text = path.read_text(encoding="utf-8")
+
+    mock = _field(text, "モック")
+    impl = _field(text, "実装")
+    published = _field(text, "公開")
+
+    if not mock:
+        err(path, "「モック」（元にした HTML）が無い。"
+                  "**どのモックの台帳か分からない台帳は、照合できない**")
+    else:
+        ref = mock.strip("`")
+        if MOCK_PLACEHOLDER.fullmatch(ref):
+            err(path, "「モック」が雛形のまま")
+        elif not (ROOT / ref).exists():
+            err(path, f"モックが存在しない: {ref!r}"
+                      f"（消したなら台帳も畳む。残すなら置き場所を直す）")
+    if not published:
+        err(path, "「公開」が無い（モックはリンクで渡す。"
+                  "渡していないなら `公開しない: 理由` と書く）")
+    elif "http" not in published and not published.startswith("公開しない"):
+        err(path, "「公開」が URL でも `公開しない: 理由` でもない")
+    if not impl:
+        err(path, "「実装」が無い。**実装先を書かない台帳は、ズレを検出できない**"
+                  "（まだ実装していないなら `未着手`）")
+
+    texts = _table_rows(text, "文言")
+    elements = _table_rows(text, "要素")
+    colors = _table_rows(text, "色")
+    if not texts:
+        err(path, "文言の表が空。"
+                  "**抽出は手で数えない** — `scripts/mock_capture.py` で作り直す")
+    if not elements:
+        err(path, "要素の表が空（何が実装されるべきかが決まっていない）")
+
+    # 色は、生の値のままでは実装に持ち込めない。対応づけの欠落を先に見る
+    raw_values = []
+    for i, cells in colors:
+        if len(cells) < 4:
+            continue
+        raw, token = cells[1], cells[3]
+        if raw in ("—", "-", ""):
+            continue
+        if not token or token in ("—", "-", "不明", "未定") or MOCK_PLACEHOLDER.fullmatch(token):
+            err(path, f"色 {raw} がトークンに対応づいていない。"
+                      f"**「赤」で合意したものが実装で別の赤になる**のはここが空だから。"
+                      f"近い既存トークンに寄せるか、足してから実装する", i)
+        raw_values.append((i, raw, token))
+
+    # 台帳に書いたトークンが、値の正（design-tokens.md）に無い
+    tokens_file = BASE / "specs/05-surface/design-tokens.md"
+    if tokens_file.exists():
+        defined = tokens_file.read_text(encoding="utf-8")
+        for i, raw, token in raw_values:
+            # `--danger` のような CSS 変数名を `-` を落として比べない。
+            # 落とすと `color.status.danger` に部分一致してしまい、
+            # **モック側の変数名が、そのままトークンとして通る**
+            name = token.strip("`")
+            if name and not MOCK_PLACEHOLDER.fullmatch(token) and name not in defined:
+                err(path, f"トークン {token!r} が {BASE_REL}specs/05-surface/"
+                          f"design-tokens.md に無い（台帳にしか無い名前は、"
+                          f"実装した人には見えない）", i)
+
+    # 状態の書き方。空欄や TODO を許すと、埋めないまま「実装済み」に見える
+    for label, rows, col in (("文言", texts, 2), ("要素", elements, 3)):
+        for i, cells in rows:
+            if len(cells) <= col:
+                err(path, f"{label}の行に状態の欄が無い", i)
+                continue
+            if not _mock_state(cells[col]):
+                err(path, f"{label}の状態が `実装` / `見送り: UXDR-…` / `動的: 理由` "
+                          f"のいずれでもない: {cells[col]!r}"
+                          f"（**未記入は「まだ決めていない」であって「実装した」ではない**）", i)
+            elif "見送り" in cells[col] and "UXDR" not in cells[col]:
+                err(path, "見送るなら UXDR を参照する"
+                          "（記録の無い見送りは、次の人には欠落に見える）", i)
+
+    if not impl or impl.startswith(MOCK_NOT_STARTED):
+        return                      # まだ実装していない。照合するものが無い
+
+    source = _impl_source(impl)
+    if source is None:
+        err(path, f"実装先が存在しない: {impl!r}"
+                  f"（動かしたなら台帳も直す。**指していない台帳は誰も直さない**）")
+        return
+    flat = _squeeze(source)
+
+    for i, cells in texts:
+        if len(cells) < 3 or _mock_state(cells[2]) != MOCK_STATE_DONE:
+            continue
+        word = cells[1]
+        if MOCK_PLACEHOLDER.fullmatch(word):
+            continue
+        if _squeeze(word) not in flat:
+            err(path, f"モックの文言が実装に無い: {word!r}"
+                      f"（言い換えたなら台帳を書き換えてから実装する。"
+                      f"組み立てているなら `動的: 理由`）", i)
+
+    for i, cells in elements:
+        if len(cells) < 4 or _mock_state(cells[3]) != MOCK_STATE_DONE:
+            continue
+        mark = cells[2].strip("`")
+        if not mark or MOCK_PLACEHOLDER.fullmatch(mark):
+            err(path, f"要素 {cells[1]!r} に実装の目印が無い"
+                      f"（目印の無い行は、落ちても機械が気づけない）", i)
+        elif _squeeze(mark) not in flat:
+            err(path, f"モックの要素が実装に無い: {cells[1]!r}（目印 {mark!r}）"
+                      f"（落としたなら `見送り: UXDR-…`）", i)
+
+    for i, raw, _token in raw_values:
+        if raw.startswith("#") and raw.lower() in source.lower():
+            err(path, f"実装が色を直書きしている: {raw}"
+                      f"（モックの生値をそのまま持ち込まない。トークンを参照する）", i)
+
+
 def check_navigation(path: Path) -> None:
     """ナビゲーション。到達できない画面と、根拠のない項目を検出する。"""
     text = path.read_text(encoding="utf-8")
@@ -1136,6 +1389,10 @@ def check_spec(path: Path) -> None:
         check_navigation(path)
     elif rel == "specs/05-surface/design-tokens.md":
         check_design_tokens(path)
+    elif rel == "specs/05-surface/design-system.md":
+        check_design_system(path)
+    elif rel.startswith("specs/05-surface/mocks/"):
+        check_mock_ledger(path)
     check_naming(path)
 
 
@@ -1198,8 +1455,11 @@ PLUGIN_FILES = [
     "commands/validate.md",
     "commands/uninstall.md",
     "commands/update.md",
+    "commands/design-system.md",
+    "commands/mock-ledger.md",
     "scripts/validate.py",
     "scripts/hook.py",
+    "scripts/mock_capture.py",
     "scripts/update_check.py",
     "scripts/selftest.sh",
     "scripts/release.sh",
@@ -1366,6 +1626,7 @@ RENAMED = {"pd": "analyze", "pd-init": "init",
 DOCS = ["README.md", "CLAUDE.md", "DECISIONS.md",
         "commands/init.md", "commands/validate.md",
         "commands/uninstall.md", "commands/update.md",
+        "commands/design-system.md", "commands/mock-ledger.md",
         "skills/analyze/SKILL.md"]
 
 
@@ -1420,6 +1681,16 @@ def check_hook_entrypoint() -> None:
     if "stop_hook_active" not in body:
         err(entry, "差し戻しの打ち切りが無い"
                    "（publish できない環境で終われなくなる）")
+    # UI を作る前に参照先を指す。ここが消えると、同じプロジェクトで作った UI が
+    # 揃わない状態（参照するかどうかがその場の判断）に戻る。
+    if "design-system.md" not in body:
+        err(entry, "UI を作る前にデザインシステムを指す仕組みが消えている"
+                   "（参照するかどうかが、その場の判断に戻る）")
+    # モックを実装に落とす直前に台帳を指す。ここが消えると、照合する1枚が
+    # 作られないまま実装が始まり、欠落・色ズレ・文言の言い換えが元に戻る
+    if "mocks" not in body:
+        err(entry, "モックを実装に落とすときに台帳を指す仕組みが消えている"
+                   "（モックの中身を覚えているのが会話だけの状態に戻る）")
 
 
 def check_update_optout() -> None:

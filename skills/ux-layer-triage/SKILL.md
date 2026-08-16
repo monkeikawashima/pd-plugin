@@ -26,6 +26,7 @@ description: UI/UX の要望・課題を受け付け、5段階モデル（戦略
 | `skills/analyze/uiux/rules/00-common-language.md` | 5層の定義 |
 | `pd/specs/00-status.md` | どの層まで成果物があるか |
 | `pd/specs/01-strategy/concept.md` | 還元テストの対象 |
+| `pd/specs/05-surface/design-system.md` | 表層の話に降りる前の参照先（無ければ `/pd:design-system`） |
 
 ## 手順
 

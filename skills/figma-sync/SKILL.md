@@ -32,6 +32,7 @@ description: pd の仕様（トークン台帳・画面仕様）と Figma のフ
 
 | ファイル | 何のために |
 |---|---|
+| `pd/specs/05-surface/design-system.md` | **参照するデザインシステム**（種別と真実の源） |
 | `pd/specs/05-surface/design-tokens.md` | トークン台帳。**定義の真実の源はここに書いてある** |
 | `pd/specs/04-skeleton/screens/` | 画面仕様（5状態を含む） |
 | `pd/specs/01-strategy/glossary.md` | 画面に出す呼称 |

@@ -24,6 +24,7 @@ description: 表層のスキル。デザイントークンの台帳を所有し�
 
 | ファイル | 何のために |
 |---|---|
+| `pd/specs/05-surface/design-system.md` | 参照するデザインシステム（トークン定義の出所） |
 | `pd/specs/05-surface/design-tokens.md` | 既存のトークンと逸脱一覧 |
 | `skills/analyze/uiux/rules/04-accessibility.md` | 下限と、検算のやり方 |
 

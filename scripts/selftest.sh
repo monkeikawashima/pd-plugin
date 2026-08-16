@@ -1038,6 +1038,498 @@ cat > "$TOKENS" <<'EOF'
 EOF
 expect_ok "正しいトークン台帳は通る" check_design_tokens
 
+DS="$PD/specs/05-surface/design-system.md"
+
+# 参照先も種別も書かないまま置く（UI の作業のたびに同じ確認が起きる）
+cat > "$DS" <<'EOF'
+# デザインシステム
+
+社内のものを使う。
+EOF
+expect "デザインシステムの種別の欠落" "「種別」が無い"
+expect "デザインシステムの参照先の欠落" "どこを見れば正解が分かるか"
+
+# 雛形の山括弧を埋めないまま置く（決めたつもりだけが残る）
+cat > "$DS" <<'EOF'
+# デザインシステム
+
+**種別**: 自前
+
+**真実の源**: 社内 UI パッケージ
+
+## 2. 参照先
+
+| 何 | どこ |
+|---|---|
+| コンポーネントの定義 | `<パス>` |
+EOF
+expect "デザインシステムの参照先が雛形のまま" "参照先が雛形のまま"
+
+# 乗り換えたのに台帳が取り残された状態（全員が無いパスを見に行く）
+cat > "$DS" <<'EOF'
+# デザインシステム
+
+**種別**: 自前
+
+**真実の源**: 社内 UI パッケージ
+
+## 2. 参照先
+
+| 何 | どこ |
+|---|---|
+| コンポーネントの定義 | `packages/ui-kit/components` |
+EOF
+expect "デザインシステムの参照先が実在しない" "参照先が存在しない"
+
+# 期限を決めないまま例外を置く（恒久化する）
+mkdir -p "$PROJ/packages/ui-kit/components"
+cat > "$DS" <<'EOF'
+# デザインシステム
+
+**種別**: 自前
+
+**真実の源**: 社内 UI パッケージ
+
+## 2. 参照先
+
+| 何 | どこ |
+|---|---|
+| コンポーネントの定義 | `packages/ui-kit/components` |
+| 一覧の見方 | `npm run storybook` |
+
+## 4. 適用しない範囲
+
+| 範囲 | 理由 | 期限 |
+|---|---|---|
+| 管理画面 | 旧実装のまま | 未定 |
+EOF
+expect "デザインシステムの期限の無い例外" "期限の無い例外は恒久化する"
+
+cat > "$DS" <<'EOF'
+# デザインシステム
+
+**種別**: 自前
+
+**真実の源**: 社内 UI パッケージ
+
+## 2. 参照先
+
+| 何 | どこ |
+|---|---|
+| コンポーネントの定義 | `packages/ui-kit/components` |
+| 一覧の見方 | `npm run storybook` |
+| ドキュメント | https://example.invalid/ui |
+| 依存の名前 | `@example/ui-kit` |
+
+## 4. 適用しない範囲
+
+| 範囲 | 理由 | 期限 |
+|---|---|---|
+| 管理画面 | 旧実装のまま | 2026-09-30 |
+EOF
+expect_ok "正しいデザインシステム台帳は通る" check_design_system
+
+# 決まっていないこと自体は違反にしない（導入直後を赤くしない）
+cat > "$DS" <<'EOF'
+# デザインシステム
+
+**種別**: 無し（後で決める）
+
+**真実の源**: まだ無い
+EOF
+expect_no "未設定のデザインシステムを違反にしない" "design-system.md"
+
+rm -f "$DS"
+
+# ------------------------------------------- モックと実装のズレ（モック台帳）
+#
+# モックで合意したのに、実装で要素が落ち、色がトークンから外れ、文言が言い換わる。
+# **落ちたことは、落ちた側からは見えない。** 台帳を挟んで機械に見つけさせる。
+
+MOCKS="$PD/specs/05-surface/mocks"
+mkdir -p "$MOCKS" "$PROJ/pd/mocks" "$PROJ/src/search"
+
+cat > "$PROJ/pd/mocks/search.html" <<'EOF'
+<h1>検索結果</h1>
+<div>条件に合う物件が見つかりませんでした</div>
+EOF
+
+# 実装。長い文言はこのように行をまたぐ（空白を落として比べる理由）
+cat > "$PROJ/src/search/SearchResult.tsx" <<'EOF'
+export function SearchResultHeading() {
+  return <h1>検索結果</h1>
+}
+export function Empty() {
+  return <p className="empty">条件に合う物件が
+    見つかりませんでした</p>
+}
+EOF
+
+# トークン台帳に、台帳が参照する名前を足しておく（値の正はあくまでこちら）
+cat > "$TOKENS" <<'EOF'
+# デザイントークン
+
+真実の源: tokens.css
+
+| トークン名 | 値 |
+|---|---|
+| color.text.default | #111111 |
+| color.status.danger | #D93025 |
+
+## 逸脱一覧
+
+| 箇所 | 内容 | 期限 |
+|---|---|---|
+| 一覧の補助文言 | 下限割れ | 2026-09-30 |
+EOF
+
+LEDGER="$MOCKS/search.md"
+
+# 実装先を書いたのに、そこが無い（動かした台帳は誰も直さない）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: `src/nowhere`
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+
+## 2. 色
+
+| # | モックの値 | 使いどころ | トークン |
+|---|---|---|---|
+| 1 | #D93025 | 削除ボタンの背景 | color.status.danger |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "モック台帳の実装先が存在しない" "実装先が存在しない"
+
+# モックに無いモック（消したのに台帳が残っている）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/deleted.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: 未着手
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "モック台帳のモックが存在しない" "モックが存在しない"
+
+# 渡し方を書かない（リンクで渡したのかどうかが後から分からない）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **実装**: 未着手
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "モック台帳に公開の記載が無い" "「公開」が無い"
+
+# 色をトークンに対応づけないまま実装へ渡す（同じ赤にならない直接の原因）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: 未着手
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+
+## 2. 色
+
+| # | モックの値 | 使いどころ | トークン |
+|---|---|---|---|
+| 1 | #D93025 | 削除ボタンの背景 | <トークン名> |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "モック台帳の色がトークンに対応づいていない" "トークンに対応づいていない"
+
+# 台帳にしか無いトークン名（実装した人には見えない）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: 未着手
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+
+## 2. 色
+
+| # | モックの値 | 使いどころ | トークン |
+|---|---|---|---|
+| 1 | #D93025 | 削除ボタンの背景 | color.status.alarm |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "モック台帳のトークンがトークン台帳に無い" "design-tokens.md に無い"
+
+# 状態を空けたまま渡す（未記入は「実装した」ではない）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: 未着手
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "モック台帳の状態が未記入" "いずれでもない"
+
+# 記録の無い見送り（次の人には欠落に見える）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: 未着手
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 見送り |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "モック台帳の見送りに記録が無い" "見送るなら UXDR を参照する"
+
+# 文言が実装で言い換わっている（合意した文が黙って消える）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: `src/search`
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+| 2 | 該当する物件がありません | 実装 |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "モックの文言が実装から落ちている" "モックの文言が実装に無い"
+
+# 要素そのものが実装に無い（モックにあって実装に無い、が一番起きる）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: `src/search`
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+| 2 | button: 並び替え | SortButton | 実装 |
+EOF
+expect "モックの要素が実装から落ちている" "モックの要素が実装に無い"
+
+# 目印が空のまま（落ちても機械が気づけない）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: `src/search`
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | <目印> | 実装 |
+EOF
+expect "モック台帳の実装の目印が空" "実装の目印が無い"
+
+# 実装がモックの生値をそのまま持ち込んでいる
+cat > "$PROJ/src/search/Danger.tsx" <<'EOF'
+export const style = { background: "#D93025" }
+EOF
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: `src/search`
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+
+## 2. 色
+
+| # | モックの値 | 使いどころ | トークン |
+|---|---|---|---|
+| 1 | #D93025 | 削除ボタンの背景 | color.status.danger |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+EOF
+expect "実装が色を直書きしている" "実装が色を直書きしている"
+rm -f "$PROJ/src/search/Danger.tsx"
+
+# 正しい台帳。**行をまたいだ文言**も、記録つきの見送りも、動的な文言も通る
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: https://example.invalid/a/1
+- **実装**: `src/search`
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | 検索結果 | 実装 |
+| 2 | 条件に合う物件が見つかりませんでした | 実装 |
+| 3 | 3件見つかりました | 動的: 件数を埋め込む |
+| 4 | 並び替え | 見送り: UXDR-012 |
+
+## 2. 色
+
+| # | モックの値 | 使いどころ | トークン |
+|---|---|---|---|
+| 1 | #D93025 | 削除ボタンの背景 | color.status.danger |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | SearchResultHeading | 実装 |
+| 2 | button: 並び替え | SortButton | 見送り: UXDR-012 |
+EOF
+expect_ok "正しいモック台帳は通る" check_mock_ledger
+
+# まだ実装していない段階を赤くしない（台帳を作った直後から落ちると使われない）
+cat > "$LEDGER" <<'EOF'
+# モック台帳: 検索結果
+
+- **モック**: `pd/mocks/search.html`
+- **公開**: 公開しない: 社内共有のみ
+- **実装**: 未着手
+
+## 1. 文言
+
+| # | 文言 | 状態 |
+|---|---|---|
+| 1 | まだ実装していない文言 | 実装 |
+
+## 3. 要素
+
+| # | 要素 | 実装の目印 | 状態 |
+|---|---|---|---|
+| 1 | h1: 検索結果 | <目印> | 実装 |
+EOF
+expect_no "未着手のモック台帳を違反にしない" "mocks/search.md"
+
+rm -rf "$MOCKS" "$PROJ/pd/mocks" "$PROJ/src"
+
+# 抽出そのものが落ちないこと。**要約させると拾う量が変わる**ので機械に出させている
+CAPTURED="$WORK/captured.md"
+mkdir -p "$WORK/m"
+cat > "$WORK/m/x.html" <<'EOF'
+<style>:root{--c-danger:#D93025}</style>
+<h1>今月の売上</h1>
+<input placeholder="キーワードで絞り込む">
+<button>この項目を削除</button>
+EOF
+python3 "$PLUGIN/scripts/mock_capture.py" "$WORK/m/x.html" --out "$CAPTURED" >/dev/null 2>&1 || true
+for want in "今月の売上" "キーワードで絞り込む" "この項目を削除" "#D93025" "--c-danger"; do
+    if grep -q -- "$want" "$CAPTURED" 2>/dev/null; then
+        printf '  ✓ モックから抽出できる（%s）\n' "$want"; pass=$((pass + 1))
+    else
+        printf '  ✗ モックから抽出できない（%s）\n' "$want"; fail=$((fail + 1))
+    fi
+done
+
 NAV="$PD/specs/04-skeleton/navigation.md"
 
 # 到達経路を書かないまま項目を増やす（迷子を検出できない）
@@ -1626,6 +2118,16 @@ hook_case() {   # $1 = ラベル / $2 = event / $3 = 入力JSON / $4 = 期待（
     fi
 }
 
+hook_case_no() {   # $1 = ラベル / $2 = event / $3 = 入力JSON / $4 = 出てはいけない語
+    out=$(printf '%s' "$3" | CLAUDE_PROJECT_DIR="$PROJ" \
+          python3 "$PLUGIN/scripts/hook.py" "$2" 2>/dev/null)
+    if printf '%s' "$out" | grep -q "$4"; then
+        printf '  ✗ %s — %s が出た: %s\n' "$1" "$4" "$out"; fail=$((fail + 1))
+    else
+        printf '  ✓ %s\n' "$1"; pass=$((pass + 1))
+    fi
+}
+
 # 促しの宛先。判定を触ったら理由を残させ、配布物を触ったら README を促す。
 # **plugin 自身のパスに限る** — 利用プロジェクトにも skills/ はありうるため、
 # 部分一致で拾うと無関係な編集のたびに促しが出て、やがて無視される。
@@ -1665,6 +2167,68 @@ hook_case "公開しないと言われたら促さない" user-prompt-submit \
 hook_case "自分が注入した文では促さない" user-prompt-submit \
           '{"prompt":"[pd:mock-artifact] モック／画面案の要求を検知しました"}' ""
 
+# ------------------------------------------- UI を作る前に参照先を指す
+#
+# **止めない。促すだけ。** 導入直後はデザインシステムが決まっていないほうが普通で、
+# そこで作業を止めると使い物にならない。目印（pd/ledger.json）は見る側 —
+# pd を使っていないリポジトリで「決めろ」と言われても、決める先が無い。
+rm -f "$PD/specs/05-surface/design-system.md"
+hook_case "未設定なら決め方を促す" user-prompt-submit \
+          '{"prompt":"設定画面を作りたい"}' "未設定"
+hook_case "未設定でも作業は止めない" user-prompt-submit \
+          '{"prompt":"設定画面を作りたい"}' "作業は止めません"
+
+mkdir -p "$PD/specs/05-surface"
+cat > "$PD/specs/05-surface/design-system.md" <<'EOF'
+# デザインシステム
+
+**種別**: 自前
+
+**真実の源**: 社内 UI パッケージ
+
+## 2. 参照先
+
+| 何 | どこ |
+|---|---|
+| コンポーネントの定義 | `packages/ui-kit/components` |
+EOF
+hook_case "設定済みなら参照先を指す" user-prompt-submit \
+          '{"prompt":"設定画面を作りたい"}' "design-system.md"
+hook_case "モックの要求でも参照先を指す" user-prompt-submit \
+          '{"prompt":"ダッシュボードのモック作って"}' "design-system.md"
+hook_case "変更したい発言はコマンドへ回す" user-prompt-submit \
+          '{"prompt":"デザインシステムを変えたい"}' "pd:design-system"
+hook_case "自分が注入した文では促さない（参照先）" user-prompt-submit \
+          '{"prompt":"[pd:design-system] このプロジェクトのデザインシステムは"}' ""
+hook_case "UI と無関係な発言では促さない" user-prompt-submit \
+          '{"prompt":"テストが落ちているので直して"}' ""
+rm -f "$PD/specs/05-surface/design-system.md"
+
+# ------------------------------------- モックを実装に落とす直前に台帳を指す
+#
+# **止めない。促すだけ。** モックが無い実装もあり、そこで止めると使い物にならない。
+rm -rf "$PD/specs/05-surface/mocks"
+hook_case "台帳が無ければ作り方を促す" user-prompt-submit \
+          '{"prompt":"このモックを実装して"}' "mock_capture.py"
+hook_case "台帳が無くても作業は止めない" user-prompt-submit \
+          '{"prompt":"このモックを実装して"}' "作業は止めません"
+
+mkdir -p "$PD/specs/05-surface/mocks"
+cat > "$PD/specs/05-surface/mocks/search.md" <<'EOF'
+# モック台帳: 検索結果
+EOF
+hook_case "台帳があれば実装の前に指す" user-prompt-submit \
+          '{"prompt":"このモックを実装して"}' "search.md"
+hook_case "文言をそのまま写させる" user-prompt-submit \
+          '{"prompt":"コードに落として"}' "一字一句"
+hook_case "モックの要求では台帳の作り方も添える" user-prompt-submit \
+          '{"prompt":"ダッシュボードのモック作って"}' "mock_capture.py"
+hook_case "自分が注入した文では促さない（台帳）" user-prompt-submit \
+          '{"prompt":"[pd:mock-ledger] このプロジェクトにはモック台帳があります"}' ""
+hook_case "実装と無関係な発言では促さない" user-prompt-submit \
+          '{"prompt":"CHANGELOG を書いて"}' ""
+rm -rf "$PD/specs/05-surface/mocks"
+
 TRANSCRIPT="$WORK/transcript.jsonl"
 cat > "$TRANSCRIPT" <<'JSONL'
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"ダッシュボードのモック作って"}]}}
@@ -1679,8 +2243,13 @@ hook_case "差し戻しから再開したら繰り返さない" stop \
           "{\"transcript_path\":\"$TRANSCRIPT\",\"stop_hook_active\":true}" ""
 
 printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Artifact","input":{"file_path":"/tmp/mock.html"}}]}}' >> "$TRANSCRIPT"
-hook_case "publish 済みなら止めない" stop \
-          "{\"transcript_path\":\"$TRANSCRIPT\"}" ""
+hook_case_no "publish 済みなら止めない" stop \
+             "{\"transcript_path\":\"$TRANSCRIPT\"}" "block"
+
+# 渡したモックの台帳が無ければ促す。**止めない** — その場限りの絵まで台帳を
+# 強制すると、やがて全部無視される
+hook_case "publish 済みで台帳が無ければ促す" stop \
+          "{\"transcript_path\":\"$TRANSCRIPT\"}" "mock_capture.py"
 
 # モックの話をしただけ（HTML を書いていない）で止めると、この仕組みの相談すらできない。
 cat > "$WORK/talked-only.jsonl" <<'JSONL'
