@@ -107,7 +107,9 @@ sh scripts/release.sh 0.4.0             # 版の書き換え → 検証 → コ�
 sh scripts/release.sh 0.4.0 --no-push   # 手元で止めて確認する
 ```
 
-**版を手で書き換えない。** `plugin.json` / `marketplace.json` / `commands/init.md` の `ref` の3箇所を release.sh が揃えて書き換える。手でやると必ずどれかが取り残される。
+**版を手で書き換えない。** `plugin.json` / `marketplace.json` の2箇所を release.sh が揃えて書き換える。手でやると必ずどちらかが取り残される。
+
+**利用プロジェクトの `ref` は移動タグ（`v1`）で、版を焼き込まない。** 付け替えるのは `.github/workflows/release.yml` の `promote` で、**検証（validate / schema-sync / selftest）が通ったときにだけ**動かす。誤検知を出した版が利用者に届かないようにするため。焼き込みに戻すと、配るたびに全利用プロジェクトで手作業が発生する。
 
 **未コミットのままタグを打たない。** タグが古い内容を指し、手元と CI で判定が食い違う。release.sh は作業ツリーが汚れていれば中止する（この事故が3回続いたため仕組みで止めている）。
 

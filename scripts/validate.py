@@ -1764,15 +1764,18 @@ def check_version_consistency() -> None:
                                f"（書いたが配っていない）。"
                                f"配るには sh scripts/release.sh を実行する")
 
-    # pd-init が利用プロジェクトの CI に焼き込む版。古いまま配ると、
-    # 初期状態から手元（最新）と CI（旧版）で判定が食い違う。
+    # pd-init が利用プロジェクトの CI に書く ref は、移動タグ（`v1`）でなければ
+    # ならない。版を焼き込むと、配るたびに全利用プロジェクトの ref が同時に古くなり、
+    # **全員が毎回手で上げる**ことになる（v1.0.1 のまま v1.3.0 まで放置された）。
+    # 追従しても既存データが落ちないのは RULE_SINCE が保証している。
     init = PLUGIN_ROOT / "commands/init.md"
     if init.exists():
-        refs = re.findall(r"ref:\s*v([\d.]+)", init.read_text(encoding="utf-8"))
-        for ref in refs:
-            if ref != version:
-                err(init, f"CI に焼き込む ref が古い（v{ref} ≠ v{version}）。"
-                          "新しいプロジェクトが旧版の判定器で CI を回すことになる")
+        major = version.split(".")[0]
+        for line in init.read_text(encoding="utf-8").split("\n"):
+            m = re.search(r"ref:\s*(\S+)", line.split("#", 1)[0])
+            if m and m.group(1).strip() != f"v{major}":
+                err(init, f"CI に書く ref が移動タグでない（{m.group(1)} ≠ v{major}）。"
+                          "版を焼き込むと、配るたびに全利用プロジェクトで手作業が要る")
 
 
 def _function_body(src: str, name: str) -> str | None:
@@ -1944,22 +1947,33 @@ def check_ci_ref(ci: Path, body: str) -> None:
         m = re.search(r"ref:\s*(\S+)", code)
         if m:
             raw.append(m.group(1).strip())
-    refs = [r.lstrip("v") for r in raw if re.fullmatch(r"v?\d+\.\d+\.\d+", r)]
-    if not refs:
-        # 版を固定していない = CI が既定ブランチや commit を追う。判定が予告なく
-        # 変わり、手元を更新していないのに CI だけ落ちる日が来る。
-        fixed = "・".join(raw) if raw else "ref が無い"
-        warn(ci, f"plugin の版を固定していない（{fixed}）。"
-                 f"commit やブランチではなく、`ref: v{version}` のようにタグで指定する"
-                 f"（版が読めないと、手元との食い違いを検出できない）")
+    # **移動タグ（`v1`）を追っていれば、それが正しい状態。** 1.x の最新に自動で
+    # 追従し、利用者は二度と ref を触らない。付け替えはリリースの検証が通ったときに
+    # だけ行われるため、誤検知を出した版は届かない（release.yml の promote）。
+    major = f"v{version.split('.')[0]}"
+    if major in raw:
         return
 
-    for ref in set(refs):
+    refs = [r.lstrip("v") for r in raw if re.fullmatch(r"v?\d+\.\d+\.\d+", r)]
+    if not refs:
+        # 版として読めない = commit やブランチを追っている。ブランチは検証を
+        # 通っていない状態も拾うため、移動タグとは別物として扱う。
+        fixed = "・".join(raw) if raw else "ref が無い"
+        warn(ci, f"plugin の版を追えていない（{fixed}）。"
+                 f"`ref: {major}` にすると 1.x の最新に自動で追従する"
+                 f"（検証を通った版にだけ付け替わる）")
+        return
+
+    # 版を焼き込んでいる。動く分には困らないが、**配るたびに古くなる**ので
+    # 毎回手で上げることになる。移動タグへ移せば、この作業が消える。
+    for ref in sorted(set(refs)):
         if ref == version:
-            continue
-        if _parts(ref) < _parts(version):
+            warn(ci, f"plugin の版を焼き込んでいる（v{ref}）。今は手元と一致しているが、"
+                     f"次に配られた時点で古くなる。`ref: {major}` にすると以後さわらなくてよい")
+        elif _parts(ref) < _parts(version):
             warn(ci, f"CI が固定している plugin の版が古い（v{ref} ≠ v{version}）。"
-                     f"手元と CI で違う判定器が動く。ref を v{version} に上げる")
+                     f"手元と CI で違う判定器が動く。`ref: {major}` に変える"
+                     f"（以後は 1.x の最新に自動で追従する）")
         else:
             warn(ci, f"CI が固定している plugin の版が手元より新しい"
                      f"（v{ref} ≠ v{version}）。`/pd:update` で手元を更新する")

@@ -101,7 +101,9 @@ pd/.local/
 .DS_Store
 ```
 
-5. **CI** — `.github/workflows/validate.yml` を作る（既にあれば触らない）。`TZ` と plugin の取得は必須。`ref` は plugin の版を固定する
+5. **CI** — `.github/workflows/validate.yml` を作る（既にあれば触らない）。`TZ` と plugin の取得は必須。
+
+   **`ref` は `v1`（移動タグ）。版を焼き込まない。** 焼き込むと、plugin を配るたびに全利用プロジェクトの ref が同時に古くなり、全員が毎回手で上げることになる（実際に v1.0.1 のまま v1.3.0 まで放置された）。`v1` は**検証を通ったリリースにだけ**付け替わるので、誤検知を出した版は届かない
 
 ```yaml
 name: validate
@@ -123,7 +125,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: monkeikawashima/pd-plugin
-          ref: v1.8.0
+          # 1.x の最新に自動で追従する（検証を通った版にだけ付け替わる）。
+          # 版を焼き込むと、配るたびに全プロジェクトで手作業が要る。
+          ref: v1
           path: .pd-plugin
       - name: 規約を検証する
         run: python3 .pd-plugin/scripts/validate.py

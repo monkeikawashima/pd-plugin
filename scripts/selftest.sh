@@ -1833,12 +1833,21 @@ sed_replace "$CI" "          # 以前は ref: v0.0.1 だった
 sed_replace "$CI" "ref: v0.0.1" "ref: v9999.0.0"
 expect "CI が固定する plugin の版が手元より新しい" "手元より新しい"
 sed_replace "$CI" "ref: v9999.0.0" "ref: 4762a00"
-expect "CI が commit を指している（版として読めない）" "plugin の版を固定していない"
+expect "CI が commit を指している（版として読めない）" "plugin の版を追えていない"
 sed_replace "$CI" "          ref: 4762a00
 " ""
-expect "CI が plugin の版を固定していない" "plugin の版を固定していない"
+expect "CI が plugin の版を追えていない" "plugin の版を追えていない"
+
+# 版を焼き込んでいる（今は一致していても、次に配られた時点で古くなる）。
+# 全利用プロジェクトが毎回手で上げる状態から抜けられない。
 sed_replace "$CI" "          path: .pd-plugin" "          ref: v$PLUGIN_VERSION
           path: .pd-plugin"
+expect "CI が plugin の版を焼き込んでいる" "plugin の版を焼き込んでいる"
+
+# **正しい書き方** — 移動タグを追っていれば何も言わない。
+# これが無いと、判定を締めたときに正常なプロジェクトを巻き込んだことに気づけない。
+sed_replace "$CI" "ref: v$PLUGIN_VERSION" "ref: v${PLUGIN_VERSION%%.*}"
+expect_no "移動タグを追っていれば何も言わない" "plugin の版"
 
 # ------------------------------------------------------- 仕組みの無効化（plugin 側）
 
@@ -2086,7 +2095,7 @@ PY
 }
 bump 9.9.9
 expect_plugin "版を上げて履歴を書き忘れる" "9.9.9 の項目が無い"
-expect_plugin "CI に焼き込む ref の古び" "CI に焼き込む ref が古い"
+expect_plugin "init.md の ref が移動タグでない" "CI に書く ref が移動タグでない"
 cp "$ROOT/.claude-plugin/marketplace.json" "$PLUGIN/.claude-plugin/marketplace.json"
 
 # plugin.json だけ上げ忘れた（marketplace.json 側だけ上げても更新は届かない）

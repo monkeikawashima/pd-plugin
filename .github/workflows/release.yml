@@ -34,3 +34,53 @@ jobs:
           fi
           python3 scripts/changelog_section.py "${TAG#v}" > /tmp/notes.md
           gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md
+
+  # 利用プロジェクトが追う移動タグ（v1）を、この版へ付け替える。
+  #
+  # なぜ追従タグなのか。固定（`ref: v1.8.0`）だと、配るたびに全利用プロジェクトの
+  # ref が同時に古くなり、**全員が毎回手で上げる**ことになる。上げなければ手元と
+  # CI で違う判定器が動く。実際に v1.0.1 のまま v1.3.0 まで放置された。
+  #
+  # 追従しても既存データが落ちないのは、判定ごとの適用開始日（RULE_SINCE）が
+  # 「後から足した判定は、それ以降に書いた Note にしか効かない」を保証しているため。
+  # 置き場所の変更も旧レイアウトを読み続ける（BASE の自動判定）。
+  # **pd は「既存データを書き換えないと通らない変更」を出さない運用になっている。**
+  #
+  # 残るリスクは規約ではなく検証器の不具合（v1.5.2 / v1.5.3 で誤検知を出した）。
+  # だから**検証が通ったときにだけ**タグを動かす。落ちた版は v1 に載らず、
+  # 利用者には届かない。固定が守っていたものを、固定せずに守る。
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: この版が検証を通るか
+        env:
+          # 台帳の当日判定は実行マシンのローカル時刻。runner の既定 UTC のままだと
+          # selftest がずれる（plugin 自身の validate.yml と同じ理由）。
+          TZ: Asia/Tokyo
+        run: |
+          python3 scripts/validate.py
+          python3 scripts/schema-sync.py
+          sh scripts/selftest.sh
+
+      - name: v{major} を付け替える
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # v1.9.0 → v1。プレリリース等、semver として読めないタグでは動かさない。
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "semver のタグではないので付け替えない: $TAG"; exit 0 ;;
+          esac
+          REST="${TAG#v}"
+          MAJOR="v${REST%%.*}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f "$MAJOR" "$TAG"
+          git push -f origin "$MAJOR"
+          echo "$MAJOR → $TAG"

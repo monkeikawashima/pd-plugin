@@ -70,9 +70,9 @@ printf '版 %s → %s\n' "$CURRENT" "$VERSION"
 
 # ------------------------------------------------------------------ 書き換え
 
-step "版を書き換える（plugin.json / marketplace.json / commands/init.md の ref）"
+step "版を書き換える（plugin.json / marketplace.json）"
 python3 - "$VERSION" <<'PY'
-import json, pathlib, re, sys
+import json, pathlib, sys
 version = sys.argv[1]
 
 p = pathlib.Path(".claude-plugin/plugin.json")
@@ -86,11 +86,9 @@ for entry in d.get("plugins", []):
     entry["version"] = version
 p.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-# 利用プロジェクトの CI が checkout する版。古いまま配ると、新しく始めた
-# プロジェクトが初期状態から旧版の判定器で CI を回すことになる。
-p = pathlib.Path("commands/init.md")
-p.write_text(re.sub(r"ref:\s*v[\d.]+", f"ref: v{version}", p.read_text(encoding="utf-8")),
-             encoding="utf-8")
+# 利用プロジェクトの CI が checkout する ref は `v1`（移動タグ）で、版を焼き込まない。
+# ここで書き換えるものは無い。付け替えは .github/workflows/release.yml が、
+# **検証を通ったときにだけ**行う（誤検知を出した版を利用者に届けないため）。
 PY
 git --no-pager diff --stat
 
