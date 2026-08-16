@@ -23,6 +23,17 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" user-prompt-submit",
+            "statusMessage": "pd 場面判定"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [

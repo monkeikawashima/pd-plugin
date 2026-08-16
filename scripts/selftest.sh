@@ -1358,11 +1358,13 @@ d['hooks']['PostToolUse'] = [h for h in d['hooks']['PostToolUse']
                              if 'hook.py' not in json.dumps(h)]
 d['hooks'].pop('SessionStart', None)
 d['hooks'].pop('Stop', None)
+d['hooks'].pop('UserPromptSubmit', None)
 p.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding='utf-8')
 PY
 expect_plugin "PostToolUse hook の削除" "PostToolUse の hook が消えている"
 expect_plugin "SessionStart hook の削除" "SessionStart の hook が消えている"
 expect_plugin "Stop hook の削除" "Stop の hook が消えている"
+expect_plugin "UserPromptSubmit hook の削除" "UserPromptSubmit の hook が消えている"
 cp "$ROOT/hooks/hooks.json" "$PLUGIN/hooks/hooks.json"
 
 sed_replace "$PLUGIN/scripts/hook.py" "ledger.json" "marker.json"
@@ -1371,6 +1373,16 @@ cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
 
 sed_replace "$PLUGIN/scripts/hook.py" "DECISIONS.md" "somewhere-else.md"
 expect_plugin "設計判断の記録の促しの消失" "促しが消えている"
+cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
+
+# モックを公開されたページで返す仕組みが外れると、同じ頼み方でも
+# 公開されたりローカルの HTML で終わったりに戻る。
+sed_replace "$PLUGIN/scripts/hook.py" "Artifact" "SomethingElse"
+expect_plugin "モックの publish の消失" "Artifact で publish させる仕組みが消えている"
+cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
+
+sed_replace "$PLUGIN/scripts/hook.py" "stop_hook_active" "never_active"
+expect_plugin "差し戻しの打ち切りの消失" "差し戻しの打ち切りが無い"
 cp "$ROOT/scripts/hook.py" "$PLUGIN/scripts/hook.py"
 
 sed_replace "$PLUGIN/scripts/hook.py" "update_check" "nothing_at_all"
@@ -1633,6 +1645,52 @@ hook_case "Write の応答（filePath）も読む" post-tool-use \
 hook_case "残存違反を通知する" session-start "{}" "systemMessage"
 rm -f "$BADFILE"
 prune
+
+# ------------------------------------------- モックは必ず公開して渡す
+#
+# 「モックを作って」に対して、公開されたページで返すかローカルの HTML で終わるかが
+# その場の判断だった。入口（要求の検知）と出口（publish せずに終わろうとしたとき）の
+# 2箇所で挟む。**当たったときしか何も出さない**ので、pd と無関係な発言では黙る。
+hook_case "モックの要求に publish を促す" user-prompt-submit \
+          '{"prompt":"ダッシュボードのモック作って"}' "Artifact"
+hook_case "画面案という言い方でも促す" user-prompt-submit \
+          '{"prompt":"申込フローの画面案がほしい"}' "Artifact"
+hook_case "無関係な発言では促さない" user-prompt-submit \
+          '{"prompt":"テストが落ちているので直して"}' ""
+hook_case "公開しないと言われたら促さない" user-prompt-submit \
+          '{"prompt":"モックをローカルだけに作って"}' ""
+
+# 注入した文そのものが会話に残る。これを「モックの要求」として読み返すと、
+# 自分の出力を自分で検知して止まらなくなる。
+hook_case "自分が注入した文では促さない" user-prompt-submit \
+          '{"prompt":"[pd:mock-artifact] モック／画面案の要求を検知しました"}' ""
+
+TRANSCRIPT="$WORK/transcript.jsonl"
+cat > "$TRANSCRIPT" <<'JSONL'
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"ダッシュボードのモック作って"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"/tmp/mock.html"}}]}}
+JSONL
+cp "$TRANSCRIPT" "$WORK/unpublished.jsonl"
+hook_case "書いたのに publish していなければ差し戻す" stop \
+          "{\"transcript_path\":\"$TRANSCRIPT\"}" "block"
+
+# 差し戻しは1回だけ。publish できない環境で終われなくなるのを防ぐ。
+hook_case "差し戻しから再開したら繰り返さない" stop \
+          "{\"transcript_path\":\"$TRANSCRIPT\",\"stop_hook_active\":true}" ""
+
+printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Artifact","input":{"file_path":"/tmp/mock.html"}}]}}' >> "$TRANSCRIPT"
+hook_case "publish 済みなら止めない" stop \
+          "{\"transcript_path\":\"$TRANSCRIPT\"}" ""
+
+# モックの話をしただけ（HTML を書いていない）で止めると、この仕組みの相談すらできない。
+cat > "$WORK/talked-only.jsonl" <<'JSONL'
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"モックの作り方について教えて"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"説明です"}]}}
+JSONL
+hook_case "話しただけでは止めない" stop \
+          "{\"transcript_path\":\"$WORK/talked-only.jsonl\"}" ""
+hook_case "記録が読めなくても止めない" stop \
+          '{"transcript_path":"/nonexistent/transcript.jsonl"}' ""
 
 # hook 自身の失敗で作業を止めない。止めてよいのは規約違反だけ。
 if printf 'not json' | CLAUDE_PROJECT_DIR="$PROJ" \

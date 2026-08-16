@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 """hook の入口。hooks.json からはこのファイルだけを呼ぶ。
 
-    python3 <plugin>/scripts/hook.py post-tool-use   < 入力JSON
-    python3 <plugin>/scripts/hook.py stop            < 入力JSON
-    python3 <plugin>/scripts/hook.py session-start   < 入力JSON
+    python3 <plugin>/scripts/hook.py post-tool-use      < 入力JSON
+    python3 <plugin>/scripts/hook.py stop               < 入力JSON
+    python3 <plugin>/scripts/hook.py session-start      < 入力JSON
+    python3 <plugin>/scripts/hook.py user-prompt-submit < 入力JSON
 
 **判定は書かない。** 判定者は validate.py 1つで、ここがやるのは
 「動くべき場面か」を決めて、その結果を hook の出力形式に整えることだけ。
@@ -64,6 +65,141 @@ README_MESSAGE = (
     "変わった場合は、同じターン内で README.md も更新してください。"
     "変わっていなければ不要です。ユーザー確認は不要です。"
 )
+
+
+# ---------------------------------------------------- モックは必ず公開して渡す
+#
+# 「モックを作って」に対して、公開されたページ（Artifact）で返すか、ローカルに
+# HTML を書いて終わるかは、これまでその場の判断に委ねられていた。**同じ頼み方を
+# しても結果が変わる。** 利用者から見ると「やってくれたりやってくれなかったり」で、
+# 何が条件なのか分からない。
+#
+# ここで場面の判定を機械にやらせる。要求の検知（入口）と、公開せずに終わろうと
+# したときの差し戻し（出口）の2箇所で挟む。
+#
+# **この2つだけは `pd/ledger.json` を見ない**（DECISIONS.md §2）。他の hook と違い
+# 当たったときしか何も出さないため、pd と無関係なリポジトリでも邪魔にならない。
+
+# 印。注入した文そのものが会話に残り、次のターンで「モックの要求」として
+# 読み返されるのを防ぐ（自分の出力を自分で検知する堂々巡りになる）。
+MOCK_MARK = "[pd:mock-artifact]"
+
+MOCK_WORDS = (
+    "モック", "もっく", "mock",
+    "ワイヤー", "wireframe",
+    "画面イメージ", "画面案", "ui案", "ui 案", "デザイン案", "たたき台",
+    "プロトタイプ", "prototype",
+)
+
+# 利用者が公開を望まないと明示した場合。ここを見ないと、断っても毎回促される。
+MOCK_OPT_OUT = (
+    "publishしない", "パブリッシュしない", "公開しない", "共有しない",
+    "artifact不要", "artifactなし", "artifactはいらない", "artifactはやめて",
+    "ローカルだけ", "ローカルのみ", "ファイルだけ", "ファイルで",
+)
+
+MOCK_MESSAGE = (
+    f"{MOCK_MARK} モック／画面案の要求を検知しました。次の順で進めてください。"
+    "① `artifact-design` skill を読み込む "
+    "② HTML を書く "
+    "③ **Artifact ツールで publish し、URL を返す**。"
+    "ローカルにファイルを書いただけでは未完了です — 利用者はリンクで受け取ります。"
+    "既に publish 済みのものへの修正なら、同じファイルパスで publish し直してください"
+    "（同じ URL に上書きされます）。"
+    "Artifact ツールが使えない環境なら、その旨を1行伝えてからファイルのパスを返してください。"
+    "API のモック・テストダブルの話であれば、この指示は関係ありません。"
+)
+
+MOCK_BLOCK = (
+    f"{MOCK_MARK} モックの HTML を書きましたが、Artifact で publish していません。"
+    "**この状態は未完了です。** Artifact ツールで publish し、URL を返してから終えてください。"
+    "利用者が公開を望んでいない場合、または Artifact ツールが使えない場合は、"
+    "その理由を1行伝えたうえで終えて構いません。"
+)
+
+# publish の対象になる成果物。ここを広げると、モックの話をしながら書いた
+# 無関係なファイルで差し戻すことになる。
+MOCK_SUFFIX = (".html", ".htm")
+ARTIFACT_TOOL = "Artifact"
+WRITE_TOOLS = ("Write", "Edit", "MultiEdit")
+
+
+def normalize(text: str) -> str:
+    return "".join(text.split()).lower()
+
+
+def wants_mock(text: str) -> bool:
+    if MOCK_MARK in text:
+        return False           # 自分が注入した文
+    flat = normalize(text)
+    if any(word in flat for word in MOCK_OPT_OUT):
+        return False
+    return any(word in flat for word in MOCK_WORDS)
+
+
+def transcript_records(path: str) -> list[dict]:
+    """会話の記録を読む。読めなければ空（差し戻さない側に倒す）。"""
+    if not path:
+        return []
+    records = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return []
+    return records
+
+
+def mock_left_unpublished(records: list[dict]) -> bool:
+    """モックを頼まれ、HTML を書き、publish していない状態か。
+
+    3つ揃ったときだけ差し戻す。「モックの話をした」だけでは止めない
+    （この判定自体の相談で止まると使い物にならない）。
+    """
+    asked = wrote = published = False
+    for rec in records:
+        message = rec.get("message") or {}
+        role = message.get("role") or rec.get("type")
+        content = message.get("content")
+        if isinstance(content, str):
+            if role == "user" and wants_mock(content):
+                asked = True
+            continue
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            kind = block.get("type")
+            if kind == "text":
+                if role == "user" and wants_mock(block.get("text") or ""):
+                    asked = True
+            elif kind == "tool_use":
+                name = block.get("name") or ""
+                if name == ARTIFACT_TOOL:
+                    published = True
+                elif name in WRITE_TOOLS:
+                    target = (block.get("input") or {}).get("file_path") or ""
+                    if target.lower().endswith(MOCK_SUFFIX):
+                        wrote = True
+    return asked and wrote and not published
+
+
+def user_prompt_submit(event: dict) -> None:
+    """発言のたびに走る。モックの要求に当たったときだけ指示を足す。"""
+    if not wants_mock(event.get("prompt") or ""):
+        return
+    emit({"hookSpecificOutput": {
+        "hookEventName": "UserPromptSubmit",
+        "additionalContext": MOCK_MESSAGE,
+    }})
 
 
 def plugin_relative(raw: str) -> str | None:
@@ -148,13 +284,25 @@ def post_tool_use(event: dict) -> None:
                         "（判定: pd plugin の validate.py）\n" + out})
 
 
-def whole_project(_: dict) -> None:
+def whole_project(event: dict) -> None:
+    payload: dict = {}
+
     root = project_dir()
-    if not is_pd_project(root):
-        return
-    code, out = run_validate()
-    if code != 0:
-        emit({"systemMessage": "⚠ 規約違反が残っています\n" + out})
+    if is_pd_project(root):
+        code, out = run_validate()
+        if code != 0:
+            payload["systemMessage"] = "⚠ 規約違反が残っています\n" + out
+
+    # 差し戻しは1回だけ。`stop_hook_active` は差し戻しから再開した合図で、
+    # ここを見ないと publish できない環境で永久に終われなくなる。
+    if not event.get("stop_hook_active"):
+        records = transcript_records(event.get("transcript_path") or "")
+        if mock_left_unpublished(records):
+            payload["decision"] = "block"
+            payload["reason"] = MOCK_BLOCK
+
+    if payload:
+        emit(payload)
 
 
 def update_notice() -> str:
@@ -191,6 +339,7 @@ EVENTS = {
     "post-tool-use": post_tool_use,
     "stop": whole_project,
     "session-start": session_start,
+    "user-prompt-submit": user_prompt_submit,
 }
 
 

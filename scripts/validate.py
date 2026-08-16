@@ -1230,7 +1230,7 @@ def check_plugin_guards() -> None:
         except json.JSONDecodeError as e:
             err(hooks_file, f"JSON として壊れている（hook が全て無効になる）: {e}")
             hooks = {}
-        for event in ("PostToolUse", "Stop", "SessionStart"):
+        for event in ("PostToolUse", "Stop", "SessionStart", "UserPromptSubmit"):
             body = json.dumps(hooks.get(event, []), ensure_ascii=False)
             if "hook.py" not in body:
                 err(hooks_file, f"{event} の hook が消えている（hook.py）")
@@ -1412,6 +1412,14 @@ def check_hook_entrypoint() -> None:
     # 起動時に知らせないと、手元だけ古いまま CI と判定が食い違う。
     if "update_check" not in body:
         err(entry, "起動時の更新の案内が消えている（利用者に新しい版が届かない）")
+    # モックを頼まれたら公開されたページで返す。ここが消えると、同じ頼み方でも
+    # 公開されたりローカルの HTML で終わったりに戻る（利用者から見て条件が読めない）。
+    if "Artifact" not in body:
+        err(entry, "モックを Artifact で publish させる仕組みが消えている"
+                   "（ローカルにファイルを書いただけで終わる状態に戻る）")
+    if "stop_hook_active" not in body:
+        err(entry, "差し戻しの打ち切りが無い"
+                   "（publish できない環境で終われなくなる）")
 
 
 def check_update_optout() -> None:
